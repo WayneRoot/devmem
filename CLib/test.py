@@ -221,11 +221,6 @@ def main():
     input_image = cv2.imread(input_img_path)        # HWC BGR
     preprocessed_nchwRGB = preprocessing(input_image, ph_height, ph_width)
     cnt=0
-    with open('preprocessed_nchwRGB.txt','w') as f:
-        for i in preprocessed_nchwRGB.reshape(-1):
-            cnt+=1
-            f.write("%2x\n"%i)
-        print('dump preprocessed_nchwRGB.txt:',cnt)
     d = preprocessed_nchwRGB.reshape(-1).astype(np.uint8).tostring()
     devmem(0xe018c000,len(d),verbose=verbose).write(d).close()
 
@@ -263,9 +258,7 @@ def main():
     res = dn.postprocessing(predictions,im_w,im_h,0.5,0.5)
     # res: object_name, confidence, ( centerX, centerY, boxW, boxH )
     for r in res:
-        name = r[0]
-        conf = r[1]
-        bbox = r[2]
+        name, conf, bbox = r[:3]
         obj_col = colors[classes.index(r[0])]
         rect = box2rect(bbox)
         print("{}".format(bbox))
@@ -276,15 +269,11 @@ def main():
           ( rect[2], rect[3] ),
           (255,255,255)
         )
-        continue
-        #cv2.putText(
-          #input_image,
-          #best_class_name,
-          #(
-           #int((nms_predictions[i][0][0]+nms_predictions[i][0][2])/2),
-           #int((nms_predictions[i][0][1]+nms_predictions[i][0][3])/2)
-          #),
-          #cv2.FONT_HERSHEY_SIMPLEX,1,color,2)
+        cv2.putText(
+          input_image,
+          name,
+          (int(bbox[0]), int(bbox[1])),
+          cv2.FONT_HERSHEY_SIMPLEX,1,(255,255,255),2)
     cv2.imwrite('result.jpg',input_image)
 
 if __name__ == '__main__':
