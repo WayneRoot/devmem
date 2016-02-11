@@ -25,8 +25,8 @@ colors = [(254.0, 254.0, 254), (239.8, 211.6, 127),
           (169.3, 0.0, 254), (155.2, -42.3, 127),
           (141.1, -84.6, 0), (127.0, 254.0, 254), 
           (112.8, 211.6, 127), (98.7, 169.3, 0),
-          (84.6, 127.0, 254), (70.5, 84.6, 127),
           (56.4, 42.3, 0), (42.3, 0.0, 254), 
+          (84.6, 127.0, 254), (70.5, 84.6, 127),
           (28.2, -42.3, 127), (14.1, -84.6, 0),
           (0.0, 254.0, 254), (-14.1, 211.6, 127)]
 
@@ -122,16 +122,20 @@ def main():
         print("{}".format(bbox))
         print("{}".format(rect))
         cv2.rectangle(
-          input_image,
-          ( rect[0], rect[1] ),
-          ( rect[2], rect[3] ),
-          (255,255,255)
+            input_image,
+            ( rect[0], rect[1] ),
+            ( rect[2], rect[3] ),
+            #(255,255,255)
+            obj_col
         )
         cv2.putText(
-          input_image,
-          name,
-          (int(bbox[0]), int(bbox[1])),
-          cv2.FONT_HERSHEY_SIMPLEX,1,(255,255,255),2)
+            input_image,
+            name,
+            (int(bbox[0]), int(bbox[1])),
+            cv2.FONT_HERSHEY_SIMPLEX,1,
+            #(255,255,255)
+            obj_col,
+            2)
     cv2.imwrite('result.jpg',input_image)
 
 if __name__ == '__main__':
