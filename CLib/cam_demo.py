@@ -16,6 +16,8 @@ args.add_argument('-s', '--shrink',type=int,default=2,choices=[1,2,3])
 args.add_argument('-bg','--background',type=str,default='debian2.jpg')
 args.add_argument('-k','--keep',type=int,default=600)
 args.add_argument('-th','--thread',action='store_true')
+args.add_argument('-dma',action='store_true')
+args.add_argument('-phys','--phys_addr',type=str,default='/sys/class/udmabuf/udmabuf0/phys_addr')
 args.add_argument('-cm','--cammode',type=str,default='qvga',choices=['qvga','vga','svga'])
 args=args.parse_args()
 
@@ -41,10 +43,31 @@ backgrounder(args.background)
 if os.system('which setterm') == 0: os.system('setterm -blank 0;echo setterm -blank 0')
 #print("virtual_size:",fb0.vw,fb0.vh)
 
-devmem_image = devmem(0xe018c000,ph_height*ph_width*ph_chann)
+image_area_addr = 0xe018c000
+if args.dma and os.path.exists(args.phys_addr):
+    with open(args.phys_addr) as f:
+        cmd = "image_area_addr = %s"%(f.read().strip())
+    exec(cmd)
+else:
+    args.dma=False
+print("image_area_addr:%x"%image_area_addr)
+devmem_image = devmem(image_area_addr, ph_height*ph_width*ph_chann)
 devmem_start = devmem(0xe0c00004,4)
 devmem_stat  = devmem(0xe0c00008,0x4)
 devmem_pred  = devmem(0xe0000000,0xc15c)
+devmem_dmac  = devmem(0xe0c00018,4)
+if args.dma:
+    print("DMA-Mode:On")
+    m = np.asarray([0x00000000],dtype=np.uint32).tostring()
+    b = np.asarray([image_area_addr],dtype=np.uint32).tostring()
+    devmem_dmab  = devmem(0xe0c00010,4)
+    devmem_dmab.write(b)
+    devmem_dmab.close()
+else:
+    print("DMA-Mode:Off")
+    m = np.asarray([0x80000000],dtype=np.uint32).tostring()
+devmem_dmac.write(m)
+devmem_dmac.close()
 
 n_classes = 20
 grid_h    =  9
