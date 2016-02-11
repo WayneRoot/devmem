@@ -195,7 +195,8 @@ class Core:
         predictions = None
         if self.dma_full > 0 and status[0] == 0x02000:   # CNN Idle
             pfmc = devmem_pfmc.read(np.uint32)
-            pfmc = pfmc * 1./200000000
+            devmem_pfmc.rewind()
+            pfmc = pfmc * 1./200000000.
             devmem_stat.rewind()
             start = time()
             predictions = dn.get_predictions()  # get result
@@ -335,7 +336,7 @@ def main():
             stages = wrt_stage + exe_stage + ret_stage
         if stages == 0.: stages=1.
         sys.stdout.write('\b'*80)
-        sys.stdout.write('%7.1fFPS(%5.1f%6.1f%5.1f) playback:%5.1fFPS(%5.1fmsec) %d objects'%(
+        sys.stdout.write('%7.1fFPS(%5.1f%5.1f%5.1f) playback:%5.1fFPS(%5.1fmsec) %d objects'%(
             1./(stages), 1000.*wrt_stage, 1000.*exe_stage, 1000.*ret_stage,
             images/colapse, 1000.*colapse/images, objects
         ))
