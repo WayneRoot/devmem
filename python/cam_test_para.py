@@ -9,11 +9,12 @@ from   pdb import *
 args=argparse.ArgumentParser()
 args.add_argument('-c', '--cv',action='store_true')
 args.add_argument('-s', '--shrink',type=int,default=3,choices=[1,2,3])
+args.add_argument('-vn','--videoNo',type=int,default=0)
 args.add_argument('-bg','--background',type=str,default='debian2.jpg')
 args.add_argument('-cm','--cammode',type=str,default='qvga',choices=['qvga','vga','svga'])
 args=args.parse_args()
 
-assert os.path.exists('/dev/fb0') and os.path.exists('/dev/video0')
+assert os.path.exists('/dev/fb0') and os.path.exists('/dev/video'+str(args.videoNo))
 ph_height = 288 # placeholder height
 ph_width  = 352 # placeholder width
 ph_chann  = 3
@@ -214,7 +215,7 @@ def main():
     score_threshold = 0.3
     iou_threshold = 0.3
 
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(args.videoNo)
     assert cap is not None
     print("cam.property-default:",cap.get(3),cap.get(4))
     if args.cammode=='vga':
