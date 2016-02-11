@@ -4,6 +4,6 @@ export LD_LIBRARY_PATH=devmem/CLib
 banner AREA51
 ./yv2_parse.py
 
-python ./cam_demo.py
+python ./devmem/CLib/cam_demo.py -k 15
 
 
