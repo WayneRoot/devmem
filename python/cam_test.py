@@ -7,8 +7,11 @@ from fbdraw import fb
 from   pdb import *
 
 assert os.path.exists('/dev/fb0') and os.path.exists('/dev/video0')
+ph_height = 288 # placeholder height
+ph_width  = 352 # placeholder width
+ph_chann  = 3
 fb0 = fb()
-devmem_image = devmem(0xe018c000,352*288*3)
+devmem_image = devmem(0xe018c000,ph_height*ph_width*ph_chann)
 devmem_start = devmem(0xe0c00004,4)
 devmem_stat  = devmem(0xe0c00008,0x4)
 devmem_pred  = devmem(0xe0000000,0xc15c)
@@ -102,9 +105,6 @@ def non_maximal_suppression(thresholded_predictions,iou_threshold):
 
 def preprocessing(input_image,ph_height,ph_width):
 
-#  input_image    = cv2.imread(input_img_path)        # HWC BGR
-
-  #resized_image  = cv2.resize(input_image,(ph_width, ph_height), interpolation = cv2.INTER_CUBIC)
   resized_image  = cv2.resize(input_image,(ph_width, ph_height))
 
   resized_image  = cv2.cvtColor(resized_image,cv2.COLOR_BGR2RGB)
@@ -125,7 +125,6 @@ def postprocessing(predictions,input_image,score_threshold,iou_threshold,ph_heig
   input_image = cv2.resize(input_image,(ph_width, ph_height), interpolation = cv2.INTER_CUBIC)
 
   thresholded_predictions = []
-#  print('Thresholding on (Objectness score)*(Best class score) with threshold = {}'.format(score_threshold))
 
   predictions = np.reshape(predictions,(grid_h, grid_w, n_b_boxes, n_info_per_grid))
 
@@ -161,18 +160,8 @@ def postprocessing(predictions,input_image,score_threshold,iou_threshold,ph_heig
   # Sort the B-boxes by their final score
   thresholded_predictions.sort(key=lambda tup: tup[1],reverse=True)
 
-#  print('Printing {} B-boxes survived after score thresholding:'.format(len(thresholded_predictions)))
-#  for i in range(len(thresholded_predictions)):
-#    print('B-Box {} : {}'.format(i+1,thresholded_predictions[i]))
-
   # Non maximal suppression
-#  print('Non maximal suppression with iou threshold = {}'.format(iou_threshold))
   nms_predictions = non_maximal_suppression(thresholded_predictions,iou_threshold)
-
-  # Print survived b-boxes
-#  print('Printing the {} B-Boxes survived after non maximal suppression:'.format(len(nms_predictions)))
-#  for i in range(len(nms_predictions)):
-#    print('B-Box {} : {}'.format(i+1,nms_predictions[i]))
 
   # Draw final B-Boxes and label on input image
   for i in range(len(nms_predictions)):
@@ -182,7 +171,7 @@ def postprocessing(predictions,input_image,score_threshold,iou_threshold,ph_heig
 
       # Put a class rectangle with B-Box coordinates and a class label on the image
       assert input_image is not None
-#      input_image2= cv2.rectangle(
+#      input_image2= cv2.rectangle(	# OK in python3 but NG in python2
       cv2.rectangle(
         input_image,
         ( nms_predictions[i][0][0], nms_predictions[i][0][1] ),
@@ -200,66 +189,25 @@ def postprocessing(predictions,input_image,score_threshold,iou_threshold,ph_heig
         cv2.FONT_HERSHEY_SIMPLEX,1,color,2)
   return input_image, len(nms_predictions)
 
-
-
-def inference(sess,preprocessed_image, tfdbg=False):
-
-  # Forward pass of the preprocessed image into the network defined in the net.py file
-  if tfdbg:
-      sess = tf_debug.LocalCLIDebugWrapperSession(sess)
-      sess.add_tensor_filter('has_inf_or_nan', tf_debug.has_inf_or_nan)
-  predictions = sess.run(net.o9,feed_dict={net.x:preprocessed_image})
-
-  return predictions
-
-
 def main():
 
-	# Definition of the paths
-#    weights_path      = './yolov2-tiny-voc_352_288_final.weights'
-    input_img_path    = './dog.jpg'
-    input_img_path    = './horses.jpg'
-    output_image_path = './result.jpg'
-
-    # If you do not have the checkpoint yet keep it like this! When you will run test.py for the first time it will be created automatically
-#    ckpt_folder_path = './ckpt/'
-
     # Definition of the parameters
-    ph_height = 288 # placeholder height
-    ph_width  = 352 # placeholder width
     score_threshold = 0.3
     iou_threshold = 0.3
-
-    # Definition of the session
-#    sess = tf.InteractiveSession()
-#    tf.global_variables_initializer().run()
-
-    # Check for an existing checkpoint and load the weights (if it exists) or do it from binary file
-#    print('Looking for a checkpoint...')
-#    saver = tf.train.Saver()
-#    _ = weights_loader.load(sess,weights_path,ckpt_folder_path,saver)
 
     cap = cv2.VideoCapture(0)
     assert cap is not None
     objects = images = colapse = 0
     verbose=False
     while True:
-        # Preprocess the input image
-    #    print('Preprocessing...')
         r,frame = cap.read()
         assert r is True and frame is not None
         preprocessed_nchwRGB = preprocessing(frame, ph_height, ph_width)
         cnt=0
-    #    with open('preprocessed_nchwRGB.txt','w') as f:
-    #        for i in preprocessed_nchwRGB.reshape(-1):
-    #            cnt+=1
-    #            f.write("%2x\n"%i)
-    #        print('dump preprocessed_nchwRGB.txt:',cnt)
         d = preprocessed_nchwRGB.reshape(-1).astype(np.uint8).tostring()
         devmem_image.write(d)
         devmem_image.rewind()
 
-    #    print("start FPGA accelerator")
         start = time()
         s = np.asarray([0x1],dtype=np.uint32).tostring()
         devmem_start.write(s)
@@ -276,22 +224,17 @@ def main():
         sys.stdout.write('\b'*40)
         sys.stdout.write('%.3fFPS(%.3fmsec) %d objects'%(images/colapse,1000.*colapse/images,objects))
         sys.stdout.flush()
-    #    print("fpga status:0x%08x"%(status[0]))
-    #    print("preprocessing to NCHW-RGB",preprocessed_nchwRGB.shape)
 
         # Compute the predictions on the input image
-    #    print('Computing predictions...')
         if True:
             predictions = devmem_pred.read(np.float32)
             devmem_pred.rewind()
             assert predictions[0]==predictions[0],"invalid mem values:{}".format(predictions[:8])
-    #        print("inference from FPGA",predictions.shape)
         else:
             filename = 'featuremap_8.txt'
             with open(filename) as f:
                 txt_v       = f.read().strip().split()
                 predictions = np.asarray([np.float(re.sub(',','',i)) for i in txt_v])
-    #        print("inference dummy",predictions.shape, filename)
 
 #   _predictions________________________________________________________
 #   | 4 entries                 |1 entry |     20 entries               |
@@ -314,26 +257,11 @@ def main():
 #   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #   predictions.shape=( 9,11,5,25)
 
-    #    print("predictions.shape",predictions.shape)
-
-        # Postprocess the predictions and save the output image
-    #    print('Postprocessing...')
         output_image,objects = postprocessing(predictions,frame,score_threshold,iou_threshold,ph_height,ph_width)
         fb0.imshow('result', output_image)
         key = cv2.waitKey(1)
         if key!=-1:break
-    #    cv2.imwrite(output_image_path,output_image)
-
-#    print('\n'.join([n.name for n in tf.get_default_graph().as_graph_def().node]))
-#    output_name=['xoutput']
-#    tf.identity(net.h9,name=str(output_name[0]))
-#    frzdef = tf.graph_util.convert_variables_to_constants(
-#        sess,
-#        sess.graph_def,
-#        output_name)
-#    with open('y.pb','wb') as f:f.write(frzdef.SerializeToString())
 
 if __name__ == '__main__':
      main() 
 
-#######################################################################################################################
