@@ -15,6 +15,7 @@ args.add_argument('-c', '--cv',action='store_true')
 args.add_argument('-s', '--shrink',type=int,default=2,choices=[1,2,3])
 args.add_argument('-bg','--background',type=str,default='debian2.jpg')
 args.add_argument('-k','--keep',type=int,default=600)
+args.add_argument('-vn','--videoNo',type=int,default=0)
 args.add_argument('-th','--thread',action='store_true')
 args.add_argument('-dma',action='store_true')
 args.add_argument('-phys','--phys_addr',type=str,default='/sys/class/udmabuf/udmabuf0/phys_addr')
@@ -23,7 +24,7 @@ args.add_argument('--cam_h',type=int,default=640)
 args.add_argument('--cam_w',type=int,default=320)
 args=args.parse_args()
 
-assert os.path.exists('/dev/fb0') and os.path.exists('/dev/video0')
+assert os.path.exists('/dev/fb0') and os.path.exists('/dev/video'+str(args.videoNo))
 ph_height = 288 # placeholder height
 ph_width  = 352 # placeholder width
 ph_chann  = 3
@@ -58,6 +59,7 @@ devmem_start = devmem(0xe0c00004,4)
 devmem_stat  = devmem(0xe0c00008,0x4)
 devmem_pred  = devmem(0xe0000000,0xc15c)
 devmem_dmac  = devmem(0xe0c00018,4)
+devmem_pfmc  = devmem(0xe0c00020,4)
 if args.dma:
     print("DMA-Mode:On")
     c = np.asarray([0x00000000],dtype=np.uint32).tostring()
@@ -146,89 +148,95 @@ def preprocessing(input_image,ph_height,ph_width):
   #return input_image
   return image_nchwRGB
 
-def fpga(frame,ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred):
-    start = time()
-    preprocessed_nchwRGB = preprocessing(frame, ph_height, ph_width)
-    d = preprocessed_nchwRGB.reshape(-1).astype(np.uint8).tostring()
-    devmem_image.write(d)
-    devmem_image.rewind()
+class Core:
+    def __init__(self):
+        self.dma_full = 1
 
-    s = np.asarray([0x1],dtype=np.uint32).tostring()
-    devmem_start.write(s)
-    devmem_start.rewind()
-    wrt = time() - start
-    start = time()
-    sleep(0.005)
-    for i in range(10000):
-        status = devmem_stat.read(np.uint32)
-        devmem_stat.rewind()
-        if status[0] == 0x2000:
-            break
-        sleep(0.001)
-    exe = time() - start
-    start = time()
-
-# Compute the predictions on the input image
-    #predictions = devmem_pred.read(np.float32)
-    predictions = dn.get_predictions()
-    #devmem_pred.rewind()
-    assert predictions[0]==predictions[0],"invalid mem values:{}".format(predictions[:8])
-#   _predictions________________________________________________________
-#   | 4 entries                 |1 entry |     20 entries               |
-#   | x..x | y..y | w..w | h..h | c .. c | p0 - p19      ..     p0 - p19| x 5(==num)
-#   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#   entiry size == grid_w x grid_h
-
-    ret = time() - start
-    return predictions, wrt, exe, ret
-
-def fpga_dma(frame,ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred):
-    wrt = exe = ret = 0.
-    status = devmem_stat.read(np.uint32)
-    devmem_stat.rewind()
-
-    predictions = None
-    if status[0] == 0x02000:   # CNN Idle
+    def fpga(self, preprocessed_nchwRGB, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred):
         start = time()
-        predictions = dn.get_predictions()  # get result
-        assert predictions[0]==predictions[0],"invalid mem values:{}".format(predictions[:8])
-        ret = time() - start
-        s = np.asarray([0x1],dtype=np.uint32).tostring()
-        devmem_start.write(s)
-        devmem_start.rewind()               # restart
-        sleep(0.001)
-
-    if status[0] != 0x13000:    # DMA Idle
-        start = time()
-        preprocessed_nchwRGB = preprocessing(frame, ph_height, ph_width)
         d = preprocessed_nchwRGB.reshape(-1).astype(np.uint8).tostring()
         devmem_image.write(d)
-        devmem_image.rewind()               # write to DMA area
+        devmem_image.rewind()
+
+        s = np.asarray([0x1],dtype=np.uint32).tostring()
+        devmem_start.write(s)
+        devmem_start.rewind()
         wrt = time() - start
+        start = time()
+        sleep(0.005)
+        for i in range(10000):
+            status = devmem_stat.read(np.uint32)
+            devmem_stat.rewind()
+            if status[0] == 0x2000:
+                break
+            sleep(0.001)
+        exe = time() - start
+        start = time()
 
-# Compute the predictions on the input image
-#   _predictions________________________________________________________
-#   | 4 entries                 |1 entry |     20 entries               |
-#   | x..x | y..y | w..w | h..h | c .. c | p0 - p19      ..     p0 - p19| x 5(==num)
-#   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#   entiry size == grid_w x grid_h
-    return predictions, wrt, exe, ret
+    # Compute the predictions on the input image
+        #predictions = devmem_pred.read(np.float32)
+        predictions = dn.get_predictions()
+        #devmem_pred.rewind()
+        assert predictions[0]==predictions[0],"invalid mem values:{}".format(predictions[:8])
+    #   _predictions________________________________________________________
+    #   | 4 entries                 |1 entry |     20 entries               |
+    #   | x..x | y..y | w..w | h..h | c .. c | p0 - p19      ..     p0 - p19| x 5(==num)
+    #   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    #   entiry size == grid_w x grid_h
 
-def fpga_proc(qi, qp, qs, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred):
+        ret = time() - start
+        return predictions, wrt, exe, ret
+
+    def fpga_dma(self, preprocessed_nchwRGB, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred, devmem_pfmc):
+        wrt = exe = ret = 0.
+        status = devmem_stat.read(np.uint32)
+        devmem_stat.rewind()
+
+        predictions = None
+        if self.dma_full > 0 and status[0] == 0x02000:   # CNN Idle
+            pfmc = devmem_pfmc.read(np.uint32)
+            pfmc = pfmc * 1./200000000
+            devmem_stat.rewind()
+            start = time()
+            predictions = dn.get_predictions()  # get result
+            assert predictions[0]==predictions[0],"invalid mem values:{}".format(predictions[:8])
+            ret = time() - start
+            exe = pfmc
+            s = np.asarray([0x1],dtype=np.uint32).tostring()
+            devmem_start.write(s)
+            devmem_start.rewind()               # restart
+            sleep(0.001)
+            self.dma_full = 0
+
+        elif self.dma_full == 0 and status[0] != 0x13000:    # DMA Idle
+            start = time()
+            d = preprocessed_nchwRGB.reshape(-1).astype(np.uint8).tostring()
+            devmem_image.write(d)
+            devmem_image.rewind()               # write to DMA area
+            wrt = time() - start
+            self.dma_full = 1
+
+        # Compute the predictions on the input image
+        #   _predictions________________________________________________________
+        #   | 4 entries                 |1 entry |     20 entries               |
+        #   | x..x | y..y | w..w | h..h | c .. c | p0 - p19      ..     p0 - p19| x 5(==num)
+        #   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        #   entiry size == grid_w x grid_h
+        return predictions, wrt, exe, ret
+
+def fpga_proc(qi, qp, qs, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred, devmem_pfmc):
     print 'start fpga processing'
     dn.open_predictions(0xe0000000,11*9*125)
-    exe_start = time()
+    core = Core()
+    exe_prev = 0.
     while True:
-        frame = qi.get()
+        preprocessed_nchwRGB = qi.get()
         if args.dma:
-            latest, wrt, exe, ret = fpga_dma(
-                frame, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred)
-            if latest is not None:
-                exe = time() - exe_start
-                exe_start = time()
+            latest, wrt, exe, ret = core.fpga_dma(
+                preprocessed_nchwRGB, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred, devmem_pfmc)
         else:
-            latest, wrt, exe, ret = fpga(
-                frame, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred)
+            latest, wrt, exe, ret = core.fpga(
+                preprocessed_nchwRGB, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred)
         if latest is not None:
             if qp.full(): qp.get()
             qp.put(latest)
@@ -246,7 +254,7 @@ def main():
     if args.thread:
         cap = UVC().start()
     else:
-        cap = cv2.VideoCapture(0)
+        cap = cv2.VideoCapture(args.videoNo)
         assert cap is not None
         print("cam.property-default:",cap.get(3),cap.get(4))
         if args.cammode=='vga':
@@ -268,7 +276,7 @@ def main():
     qi = Queue(3)
     qp = Queue(3)
     qs = Queue(3)
-    fp = Process(target=fpga_proc, args=(qi, qp, qs, ph_height, ph_width, devmem_image, devmem_start, devmem_stat, devmem_pred,))
+    fp = Process(target=fpga_proc, args=(qi, qp, qs, ph_height, ph_width, devmem_image, devmem_start, devmem_stat, devmem_pred, devmem_pfmc,))
     latest_res=[]
     fp.start()
     start = time()
@@ -276,8 +284,9 @@ def main():
     while True:
         r,frame = cap.read()
         assert r is True and frame is not None
+        preprocessed_nchwRGB = preprocessing(frame, ph_height, ph_width)
         if qi.full(): qi.get()
-        qi.put(frame)
+        qi.put(preprocessed_nchwRGB)
         images  += 1
 
         try:
@@ -321,12 +330,12 @@ def main():
             sleep(1.0)
         fb0.imshow('result', frame)
         if args.dma:
-            stages = exe_stage
+            stages = exe_stage + ret_stage
         else:
             stages = wrt_stage + exe_stage + ret_stage
         if stages == 0.: stages=1.
         sys.stdout.write('\b'*80)
-        sys.stdout.write('%4.1fFPS(%5.1f%5.1f%5.1f) playback:%5.1fFPS(%5.1fmsec) %d objects'%(
+        sys.stdout.write('%7.1fFPS(%5.1f%6.1f%5.1f) playback:%5.1fFPS(%5.1fmsec) %d objects'%(
             1./(stages), 1000.*wrt_stage, 1000.*exe_stage, 1000.*ret_stage,
             images/colapse, 1000.*colapse/images, objects
         ))
