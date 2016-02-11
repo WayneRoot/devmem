@@ -5,6 +5,11 @@ import cv2
 from time import sleep,time
 from   pdb import *
 
+devmem_image = devmem(0xe018c000,352*288*3)
+devmem_start = devmem(0xe0c00004,4)
+devmem_stat  = devmem(0xe0c00008,0x4)
+devmem_pred  = devmem(0xe0000000,0xc15c)
+
 n_classes = 20
 grid_h    =  9
 grid_w    = 11
@@ -247,17 +252,18 @@ def main():
     #            f.write("%2x\n"%i)
     #        print('dump preprocessed_nchwRGB.txt:',cnt)
         d = preprocessed_nchwRGB.reshape(-1).astype(np.uint8).tostring()
-        devmem(0xe018c000,len(d),verbose=verbose).write(d).close()
+        devmem_image.write(d)
+        devmem_image.rewind()
 
     #    print("start FPGA accelerator")
         start = time()
         s = np.asarray([0x1],dtype=np.uint32).tostring()
-        devmem(0xe0c00004,len(s)).write(s).close()
+        devmem_start.write(s)
+        devmem_start.rewind()
         sleep(0.020)
         for i in range(10000):
-            mem = devmem(0xe0c00008,0x4)
-            status = mem.read(np.uint32)
-            mem.close()
+            status = devmem_stat.read(np.uint32)
+            devmem_stat.rewind()
             if status[0] == 0x2000:
                 images  += 1
                 colapse += time()-start
@@ -272,11 +278,8 @@ def main():
         # Compute the predictions on the input image
     #    print('Computing predictions...')
         if True:
-            v=True
-            v=False
-            mem = devmem(0xe0000000,0xc15c,v)
-            predictions = mem.read(np.float32)
-            mem.close()
+            predictions = devmem_pred.read(np.float32)
+            devmem_pred.rewind()
             assert predictions[0]==predictions[0],"invalid mem values:{}".format(predictions[:8])
     #        print("inference from FPGA",predictions.shape)
         else:
