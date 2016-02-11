@@ -1,13 +1,27 @@
 #!/bin/bash
+
+# Setup C wrapper library
+#
 cd area51
 export LD_LIBRARY_PATH=devmem/CLib
 banner AREA51
+
+# Load Neural Network Weight onto FPGA
+#
 ./yv2_parse.py
 
+# Check and load udmabuf kernel module
+# Area size 304,128B
+#
 export phys_addr="/sys/class/udmabuf/udmabuf0/phys_addr"
 if [ ! -e "$phys_addr" ]; then
     insmod /area51/udmabuf/udmabuf.ko udmabuf0=304128
 fi
 
-python ./devmem/CLib/cam_demo.py -k 120
+# Start DEMO
+# -dma : DMA Mode On
+# -k   : Background cycle time
+#
+KEEP=120
+python ./devmem/CLib/cam_demo.py -k ${KEEP} -dma -cm svga
 
