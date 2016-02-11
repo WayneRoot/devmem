@@ -1,4 +1,5 @@
 import os,sys,re,argparse
+import glob,random,threading
 import numpy as np
 from   devmemX import devmem
 import cv2
@@ -8,10 +9,12 @@ from multiprocessing import Process, Queue
 from   pdb import *
 import dn
 
+
 args=argparse.ArgumentParser()
 args.add_argument('-c', '--cv',action='store_true')
 args.add_argument('-s', '--shrink',type=int,default=2,choices=[1,2,3])
 args.add_argument('-bg','--background',type=str,default='debian2.jpg')
+args.add_argument('-k','--keep',type=int,default=600)
 args.add_argument('-cm','--cammode',type=str,default='qvga',choices=['qvga','vga','svga'])
 args=args.parse_args()
 
@@ -26,6 +29,18 @@ def backgrounder(image_path):
     background = cv2.imread(image_path)
     fbB.imshow('back',background)
     fbB.close()
+
+def change_background():
+    me = os.path.dirname(os.path.abspath(__file__))
+    image_path=random.choice(glob.glob(os.path.join(me,'debian*.jpg')))
+    assert os.path.exists(image_path)
+    backgrounder(image_path)
+    t = threading.Timer(args.keep,change_background)
+    t.start()
+
+if args.keep > 0:
+    t = threading.Timer(args.keep,change_background)
+    t.start()
 
 fb0 = fb(shrink=args.shrink)
 if os.system('which clear') == 0: os.system('clear')
@@ -166,7 +181,8 @@ def main():
             predictions= qp.get_nowait()
             im_h, im_w = frame.shape[:2]
             res = dn.postprocessing(predictions,im_w,im_h,0.5,0.5)
-            if len(res)>0: latest_res = res
+            objects = len(res)
+            if objects>0: latest_res = res
         except:
             pass
 
