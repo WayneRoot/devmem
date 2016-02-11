@@ -103,7 +103,7 @@ colors = [(254.0, 254.0, 254), (239.8, 211.6, 127),
 anchors = [1.08,1.19,  3.42,4.41,  6.63,11.38,  9.42,5.11,  16.62,10.52]
 
 class D435:
-    def __init__(self, qi, color=True, depth=False, w=640, h=480, fps=30, warmup=5):
+    def __init__(self, qi, color=True, depth=False, w=640, h=480, fps=30, warmup=30):
         self.qi       = qi
         self.color    = color
         self.depth    = depth
@@ -119,11 +119,13 @@ class D435:
         self.rea_time = self.pre_time = 0
         self.warmup   = warmup
         print("warm up ...")
+        sleep(3)
         for i in range(self.warmup):
-            sys.stdout.write('\b'*10)
+            sys.stdout.write('\b'*20)
             sys.stdout.write('%10d/%d'%(i,self.warmup))
             sys.stdout.flush()
-            sleep(1)
+            frames = self.pipeline.wait_for_frames()
+            sleep(0.2)
         print("\nup")
         print("depth_sensor_scale:",self.scale)
 
@@ -143,7 +145,7 @@ class D435:
         if self.depth:
             align_frame      = self.align.process(frames)
             self.depth_frame = align_frame.get_depth_frame()
-            depth_frame1     = depth_frame.as_depth_frame()
+            depth_frame1     = self.depth_frame.as_depth_frame()
             self.depth_array = np.asanyarray(self.depth_frame.get_data())
         self.prep_Qi()
         self.rea_time = time() - rea_start
@@ -354,9 +356,9 @@ def main(args):
     if video_devs==1:
         cap = UVC(qi, deviceNo=args.videoNo, cammode=args.cammode)
     else:
-        cap = D435(qi, color=True, depth=args.depth)
         args.cam_w = 640
         args.cam_h = 480
+        cap = D435(qi, color=True, depth=args.depth)
     args.video_devs = video_devs
 
     sum_cam = objects = images = 0
