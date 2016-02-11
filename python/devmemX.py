@@ -28,6 +28,9 @@ class devmem():
         )
         self.mem.seek(self.seek_size, os.SEEK_SET)
 
+    def rewind(self):
+        self.mem.seek(self.seek_size, os.SEEK_SET)
+
     def write(self, datas):
         self.mem.write(datas)
         self.mem.flush(0,0)
