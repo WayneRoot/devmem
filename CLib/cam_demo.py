@@ -188,6 +188,48 @@ class Core:
         return predictions, wrt, exe, ret
 
     def fpga_dma(self, preprocessed_nchwRGB, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred, devmem_pfmc):
+
+        start = time()
+        s = np.asarray([0x1],dtype=np.uint32).tostring()
+        devmem_start.write(s)
+        devmem_start.rewind()
+        sleep(0.001)
+
+        w_start = time()
+        for i in range(10000):
+            status = devmem_stat.read(np.uint32)
+            devmem_stat.rewind()
+            if status[0] != 0x13000:    # DMA Idle
+                break
+        d = preprocessed_nchwRGB.reshape(-1).astype(np.uint8).tostring()
+        devmem_image.write(d)
+        devmem_image.rewind()               # write to DMA area
+        wrt = time() - w_start
+
+        for i in range(10000):
+            status = devmem_stat.read(np.uint32)
+            devmem_stat.rewind()
+            if status[0] == 0x2000:     # CNN Idle
+                break
+            sleep(0.001)
+        exe = time() - start
+
+        start = time()
+    # Compute the predictions on the input image
+        #predictions = devmem_pred.read(np.float32)
+        predictions = dn.get_predictions()
+        #devmem_pred.rewind()
+        assert predictions[0]==predictions[0],"invalid mem values:{}".format(predictions[:8])
+    #   _predictions________________________________________________________
+    #   | 4 entries                 |1 entry |     20 entries               |
+    #   | x..x | y..y | w..w | h..h | c .. c | p0 - p19      ..     p0 - p19| x 5(==num)
+    #   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    #   entiry size == grid_w x grid_h
+
+        ret = time() - start
+        return predictions, wrt, exe, ret
+
+    def fpga_dma2(self, preprocessed_nchwRGB, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred, devmem_pfmc):
         wrt = exe = ret = 0.
         status = devmem_stat.read(np.uint32)
         devmem_stat.rewind()
