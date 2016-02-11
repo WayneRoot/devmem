@@ -25,5 +25,5 @@ fi
 #
 KEEP=120
 #python ./devmem/CLib/cam_demo.py -k ${KEEP} -dma -cm svga
-python ./devmem/CLib/435_demo.py -k ${KEEP} -dma
+python ./devmem/CLib/435_demo.py -k ${KEEP} -dma -d
 
