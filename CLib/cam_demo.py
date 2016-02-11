@@ -58,15 +58,15 @@ devmem_pred  = devmem(0xe0000000,0xc15c)
 devmem_dmac  = devmem(0xe0c00018,4)
 if args.dma:
     print("DMA-Mode:On")
-    m = np.asarray([0x00000000],dtype=np.uint32).tostring()
+    c = np.asarray([0x00000000],dtype=np.uint32).tostring()
     b = np.asarray([image_area_addr],dtype=np.uint32).tostring()
     devmem_dmab  = devmem(0xe0c00010,4)
     devmem_dmab.write(b)
     devmem_dmab.close()
 else:
     print("DMA-Mode:Off")
-    m = np.asarray([0x80000000],dtype=np.uint32).tostring()
-devmem_dmac.write(m)
+    c = np.asarray([0x80000000],dtype=np.uint32).tostring()
+devmem_dmac.write(c)
 devmem_dmac.close()
 
 n_classes = 20
@@ -145,6 +145,7 @@ def preprocessing(input_image,ph_height,ph_width):
   return image_nchwRGB
 
 def fpga(frame,ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred):
+    head  = time()
     start = time()
     preprocessed_nchwRGB = preprocessing(frame, ph_height, ph_width)
     d = preprocessed_nchwRGB.reshape(-1).astype(np.uint8).tostring()
@@ -178,18 +179,19 @@ def fpga(frame,ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devm
 #   entiry size == grid_w x grid_h
 
     ret = time() - start
-    return predictions, wrt, exe, ret
+    tim = time() - head
+    return predictions, wrt, exe, ret, tim
 
 def fpga_proc(qi, qp, qs, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred):
     print 'start fpga processing'
     dn.open_predictions(0xe0000000,11*9*125)
     while True:
         frame = qi.get()
-        latest, wrt, exe, ret = fpga(frame, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred)
+        latest, wrt, exe, ret, tim = fpga(frame, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred)
         if qp.full(): qp.get()
         qp.put(latest)
         if qs.full(): qs.get()
-        qs.put([wrt,exe,ret])
+        qs.put([wrt,exe,ret,tim])
     dn.close_predictions()
 
 def main():
@@ -245,8 +247,8 @@ def main():
             pass
 
         try:
-            wrt_stage, exe_stage, ret_stage = qs.get_nowait()
-            fpga_total = wrt_stage + exe_stage + ret_stage
+            wrt_stage, exe_stage, ret_stage, fpga_total = qs.get_nowait()
+            #fpga_total = wrt_stage + exe_stage + ret_stage
         except:
             pass
 
@@ -274,7 +276,7 @@ def main():
             sleep(1.0)
         fb0.imshow('result', frame)
         sys.stdout.write('\b'*80)
-        sys.stdout.write('%.3fFPS(%.3fmsec) %d objects (@fpga %.3fmsec = %.3f %.3f %.3f)'%(
+        sys.stdout.write('%.3fFPS(%.3fmsec) %d objects (@fpga %.3fmsec = %.1f %.1f %.1f)'%(
             images/colapse,1000.*colapse/images,objects,
             1000.*fpga_total, 1000.*wrt_stage, 1000.*exe_stage, 1000.*ret_stage))
         sys.stdout.flush()
