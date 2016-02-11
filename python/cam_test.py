@@ -1,4 +1,4 @@
-import os,sys,re
+import os,sys,re,argparse
 import numpy as np
 from   devmemX import devmem
 import cv2
@@ -6,11 +6,30 @@ from time import sleep,time
 from fbdraw import fb
 from   pdb import *
 
+args=argparse.ArgumentParser()
+args.add_argument('-c', '--cv',action='store_true')
+args.add_argument('-s', '--shrink',type=int,default=3,choices=[1,2,3])
+args.add_argument('-bg','--background',type=str,default='debian2.jpg')
+args.add_argument('-cm','--cammode',type=str,default='qvga',choices=['qvga','vga','svga'])
+args=args.parse_args()
+
 assert os.path.exists('/dev/fb0') and os.path.exists('/dev/video0')
 ph_height = 288 # placeholder height
 ph_width  = 352 # placeholder width
 ph_chann  = 3
-fb0 = fb()
+fb0 = fb(shrink=args.shrink)
+if True:
+    fbB = fb(shrink=1)
+    assert os.path.exists(args.background)
+    background = cv2.imread(args.background)
+    os.system('clear')
+    if os.system('which clear') == 0: os.system('clear')
+    fbB.imshow('back',background)
+    print "Hitachi Solutions Technology"
+    if os.system('which setterm') == 0: os.system('setterm -blank 0;echo setterm -blank 0')
+    fbB = fb(shrink=1)
+    fbB.close()
+    print("virtual_size:",fb0.vw,fb0.vh)
 devmem_image = devmem(0xe018c000,ph_height*ph_width*ph_chann)
 devmem_start = devmem(0xe0c00004,4)
 devmem_stat  = devmem(0xe0c00008,0x4)
@@ -197,6 +216,19 @@ def main():
 
     cap = cv2.VideoCapture(0)
     assert cap is not None
+    print("cam.property-default:",cap.get(3),cap.get(4))
+    if args.cammode=='vga':
+        cap.set(3,640)  # 3:width
+        cap.set(4,480)  # 4:height
+    elif args.cammode=='svga':
+        cap.set(3,800)  # 3:width
+        cap.set(4,600)  # 4:height
+    elif args.cammode=='qvga':
+        cap.set(3,320)  # 3:width
+        cap.set(4,240)  # 4:height
+    print("cam.property-set:",cap.get(3),cap.get(4),args.cammode)
+    print("shrink:1/%d"%args.shrink)
+
     objects = images = colapse = 0
     verbose=False
     while True:
