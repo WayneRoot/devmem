@@ -187,7 +187,7 @@ class Core:
         ret = time() - start
         return predictions, wrt, exe, ret
 
-    def fpga_dma(self, preprocessed_nchwRGB, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred, devmem_pfmc):
+    def fpga_dma(self, preprocessed_nchwRGB, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred):
 
         start = time()
         s = np.asarray([0x1],dtype=np.uint32).tostring()
@@ -229,44 +229,6 @@ class Core:
         ret = time() - start
         return predictions, wrt, exe, ret
 
-    def fpga_dma2(self, preprocessed_nchwRGB, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred, devmem_pfmc):
-        wrt = exe = ret = 0.
-        status = devmem_stat.read(np.uint32)
-        devmem_stat.rewind()
-
-        predictions = None
-        if self.dma_full > 0 and status[0] == 0x02000:   # CNN Idle
-            pfmc = devmem_pfmc.read(np.uint32)
-            devmem_pfmc.rewind()
-            pfmc = pfmc * 1./200000000.
-            devmem_stat.rewind()
-            start = time()
-            predictions = dn.get_predictions()  # get result
-            assert predictions[0]==predictions[0],"invalid mem values:{}".format(predictions[:8])
-            ret = time() - start
-            exe = pfmc
-            s = np.asarray([0x1],dtype=np.uint32).tostring()
-            devmem_start.write(s)
-            devmem_start.rewind()               # restart
-            sleep(0.001)
-            self.dma_full = 0
-
-        elif self.dma_full == 0 and status[0] != 0x13000:    # DMA Idle
-            start = time()
-            d = preprocessed_nchwRGB.reshape(-1).astype(np.uint8).tostring()
-            devmem_image.write(d)
-            devmem_image.rewind()               # write to DMA area
-            wrt = time() - start
-            self.dma_full = 1
-
-        # Compute the predictions on the input image
-        #   _predictions________________________________________________________
-        #   | 4 entries                 |1 entry |     20 entries               |
-        #   | x..x | y..y | w..w | h..h | c .. c | p0 - p19      ..     p0 - p19| x 5(==num)
-        #   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        #   entiry size == grid_w x grid_h
-        return predictions, wrt, exe, ret
-
 def fpga_proc(qi, qp, qs, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred, devmem_pfmc):
     print 'start fpga processing'
     dn.open_predictions(0xe0000000,11*9*125)
@@ -276,7 +238,7 @@ def fpga_proc(qi, qp, qs, ph_height, ph_width,devmem_image, devmem_start, devmem
         preprocessed_nchwRGB = qi.get()
         if args.dma:
             latest, wrt, exe, ret = core.fpga_dma(
-                preprocessed_nchwRGB, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred, devmem_pfmc)
+                preprocessed_nchwRGB, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred)
         else:
             latest, wrt, exe, ret = core.fpga(
                 preprocessed_nchwRGB, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred)
