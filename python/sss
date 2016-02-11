@@ -1,0 +1,8 @@
+#!/bin/bash
+cd area51
+banner AREA51
+./yv2_parse.py
+
+python ./cam_demo.py
+
+
