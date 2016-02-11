@@ -10,7 +10,7 @@ import dn
 
 args=argparse.ArgumentParser()
 args.add_argument('-c', '--cv',action='store_true')
-args.add_argument('-s', '--shrink',type=int,default=3,choices=[1,2,3])
+args.add_argument('-s', '--shrink',type=int,default=2,choices=[1,2,3])
 args.add_argument('-bg','--background',type=str,default='debian2.jpg')
 args.add_argument('-cm','--cammode',type=str,default='qvga',choices=['qvga','vga','svga'])
 args=args.parse_args()
@@ -56,8 +56,8 @@ colors = [(254.0, 254.0, 254), (239.8, 211.6, 127),
           (169.3, 0.0, 254), (155.2, -42.3, 127),
           (141.1, -84.6, 0), (127.0, 254.0, 254), 
           (112.8, 211.6, 127), (98.7, 169.3, 0),
-          (84.6, 127.0, 254), (70.5, 84.6, 127),
           (56.4, 42.3, 0), (42.3, 0.0, 254), 
+          (84.6, 127.0, 254), (70.5, 84.6, 127),
           (28.2, -42.3, 127), (14.1, -84.6, 0),
           (0.0, 254.0, 254), (-14.1, 211.6, 127)]
 
@@ -129,7 +129,7 @@ def box2rect(box):
     lx, ly, rx, ry = x-w/2., y-h/2., x+w/2., y+h/2.
     if lx < 0: lx =0.
     if ly < 0: ly =0.
-    return (int(lx), int(ly), int(rx), int(ry))
+    return [int(lx), int(ly), int(rx), int(ry)]
 
 def preprocessing(input_image,ph_height,ph_width):
 
@@ -293,10 +293,10 @@ def main():
     objects = images = 0
     colapse = 0
     verbose=False
-    latest =np.zeros((grid_h,grid_w,5,25),dtype=np.float32)
     qi = Queue(3)
     qp = Queue(3)
     fp = Process(target=fpga_proc, args=(qi, qp, ph_height, ph_width, devmem_image, devmem_start, devmem_stat, devmem_pred,))
+    latest_res=[]
     fp.start()
     while True:
         r,frame = cap.read()
@@ -308,26 +308,30 @@ def main():
         images  += 1
 
         try:
-            latest = qp.get_nowait()
+            predictions= qp.get_nowait()
+            im_h, im_w = frame.shape[:2]
+            res = dn.postprocessing(predictions,im_w,im_h,0.5,0.5)
+            if len(res)>0: latest_res = res
         except:
             pass
 
-        im_h, im_w = frame.shape[:2]
-        res = dn.postprocessing(latest,im_w,im_h,0.5,0.5)
-        for r in res:
+        for r in latest_res:
             name, conf, bbox = r[:3]
-        #    obj_col = colors[classes.index(r[0])]
+            obj_col = colors[classes.index(r[0])]
             rect = box2rect(bbox)
-        #    print("{}".format(bbox))
-        #    print("{}".format(rect))
             cv2.rectangle(
                 frame,
                 ( rect[0], rect[1] ),
                 ( rect[2], rect[3] ),
-                (255,255,255)
-        #        obj_col
+                obj_col
             )
-        #output_image,objects=postprocessing(latest,frame,score_threshold,iou_threshold,ph_height,ph_width)
+            cv2.putText(
+                frame,
+                name,
+                (int(bbox[0]), int(bbox[1])),
+                cv2.FONT_HERSHEY_SIMPLEX,1,
+                obj_col,
+                2)
         colapse += time()-start
         fb0.imshow('result', frame)
         sys.stdout.write('\b'*40)
