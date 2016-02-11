@@ -33,23 +33,11 @@ def backgrounder(image_path):
     os.system("figlet HST")
     print("virtual_size:",fb0.vw,fb0.vh)
 
-def change_background():
-    me = os.path.dirname(os.path.abspath(__file__))
-    image_path=random.choice(glob.glob(os.path.join(me,'debian*.jpg')))
-    assert os.path.exists(image_path)
-    backgrounder(image_path)
-    t = threading.Timer(args.keep,change_background)
-    t.start()
-
-if args.keep > 0:
-    t = threading.Timer(args.keep,change_background)
-    t.start()
-
 fb0 = fb(shrink=args.shrink)
 #if os.system('which clear') == 0: os.system('clear')
 backgrounder(args.background)
 #os.system("banner HST")
-#if os.system('which setterm') == 0: os.system('setterm -blank 0;echo setterm -blank 0')
+if os.system('which setterm') == 0: os.system('setterm -blank 0;echo setterm -blank 0')
 #print("virtual_size:",fb0.vw,fb0.vh)
 
 devmem_image = devmem(0xe018c000,ph_height*ph_width*ph_chann)
@@ -144,6 +132,7 @@ def fpga_proc(qi, qp, ph_height, ph_width,devmem_image, devmem_start, devmem_sta
         qp.put(latest)
 
 def main():
+    me_dir = os.path.dirname(os.path.abspath(__file__))
 
     # Definition of the parameters
     score_threshold = 0.3
@@ -185,7 +174,7 @@ def main():
             im_h, im_w = frame.shape[:2]
             res = dn.postprocessing(predictions,im_w,im_h,0.5,0.5)
             objects = len(res)
-            if objects>0: latest_res = res
+            latest_res = res
         except:
             pass
 
@@ -207,6 +196,10 @@ def main():
                 obj_col,
                 2)
         colapse = time()-start
+        if (int(colapse)%args.keep)==0:
+            image_path = random.choice(glob.glob(os.path.join(me_dir,'debian*.jpg')))
+            backgrounder(image_path)
+            sleep(1.0)
         fb0.imshow('result', frame)
         sys.stdout.write('\b'*40)
         sys.stdout.write('%.3fFPS(%.3fmsec) %d objects'%(images/colapse,1000.*colapse/images,objects))
