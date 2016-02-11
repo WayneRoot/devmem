@@ -21,11 +21,10 @@ ph_width  = 352 # placeholder width
 ph_chann  = 3
 fb0 = fb(shrink=args.shrink)
 if True:
+    if os.system('which clear') == 0: os.system('clear')
     fbB = fb(shrink=1)
     assert os.path.exists(args.background)
     background = cv2.imread(args.background)
-    os.system('clear')
-    if os.system('which clear') == 0: os.system('clear')
     fbB.imshow('back',background)
     os.system("banner HST")
     if os.system('which setterm') == 0: os.system('setterm -blank 0;echo setterm -blank 0')
@@ -64,66 +63,6 @@ colors = [(254.0, 254.0, 254), (239.8, 211.6, 127),
 # YOLOv2 anchor of Bounding-Boxes
 anchors = [1.08,1.19,  3.42,4.41,  6.63,11.38,  9.42,5.11,  16.62,10.52]
 
-def sigmoid(x):
-  return 1. / (1. + np.exp(-x))
-
-def softmax(x):
-    e_x = np.exp(x - np.max(x))
-    out = e_x / e_x.sum()
-    return out
-
-def iou(boxA,boxB):
-  # boxA = boxB = [x1,y1,x2,y2]
-
-  xA = max(boxA[0], boxB[0])
-  yA = max(boxA[1], boxB[1])
-  xB = min(boxA[2], boxB[2])
-  yB = min(boxA[3], boxB[3])
- 
-  # Compute the area of intersection
-  intersection_area = (xB - xA + 1) * (yB - yA + 1)
- 
-  # Compute the area of both rectangles
-  boxA_area = (boxA[2] - boxA[0] + 1) * (boxA[3] - boxA[1] + 1)
-  boxB_area = (boxB[2] - boxB[0] + 1) * (boxB[3] - boxB[1] + 1)
- 
-  # Compute the IOU
-  iou = intersection_area / float(boxA_area + boxB_area - intersection_area)
-
-  return iou
-
-
-
-def non_maximal_suppression(thresholded_predictions,iou_threshold):
-
-  nms_predictions = []
-
-  # Add the best B-Box because it will never be deleted
-  if len(thresholded_predictions)<=0: return nms_predictions
-  nms_predictions.append(thresholded_predictions[0])
-
-  # For each B-Box (starting from the 2nd) check its iou with the higher score B-Boxes
-  # thresholded_predictions[i][0] = [x1,y1,x2,y2]
-  i = 1
-  while i < len(thresholded_predictions):
-    n_boxes_to_check = len(nms_predictions)
-    to_delete = False
-
-    j = 0
-    while j < n_boxes_to_check:
-        curr_iou = iou(thresholded_predictions[i][0],nms_predictions[j][0])
-        if(curr_iou > iou_threshold ):
-            to_delete = True
-        j = j+1
-
-    if to_delete == False:
-        nms_predictions.append(thresholded_predictions[i])
-    i = i+1
-
-  return nms_predictions
-
-
-
 def box2rect(box):
     x, y, h, w = box
     lx, ly, rx, ry = x-w/2., y-h/2., x+w/2., y+h/2.
@@ -146,77 +85,6 @@ def preprocessing(input_image,ph_height,ph_width):
   #return input_image
   return image_nchwRGB
 
-
-
-def postprocessing(predictions,input_image,score_threshold,iou_threshold,ph_height,ph_width):
-
-  input_image = cv2.resize(input_image,(ph_width, ph_height), interpolation = cv2.INTER_CUBIC)
-
-  thresholded_predictions = []
-
-  predictions = np.reshape(predictions,(grid_h, grid_w, n_b_boxes, n_info_per_grid))
-
-  for row in range(grid_h):
-    for col in range(grid_w):
-      for b in range(n_b_boxes):
-
-        tx, ty, tw, th, tc = predictions[row, col, b, :5]
-
-        center_x = (float(col) + sigmoid(tx)) * 32.0
-        center_y = (float(row) + sigmoid(ty)) * 32.0
-
-        roi_w = np.exp(tw) * anchors[2*b + 0] * 32.0
-        roi_h = np.exp(th) * anchors[2*b + 1] * 32.0
-
-        final_confidence = sigmoid(tc)
-
-        class_predictions = predictions[row, col, b, 5:]
-        class_predictions = softmax(class_predictions)
-
-        class_predictions = tuple(class_predictions)
-        best_class = class_predictions.index(max(class_predictions))
-        best_class_score = class_predictions[best_class]
-
-        left   = int(center_x - (roi_w/2.))
-        right  = int(center_x + (roi_w/2.))
-        top    = int(center_y - (roi_h/2.))
-        bottom = int(center_y + (roi_h/2.))
-        
-        if( (final_confidence * best_class_score) > score_threshold):
-          thresholded_predictions.append([[left,top,right,bottom],final_confidence * best_class_score,classes[best_class]])
-
-  # Sort the B-boxes by their final score
-  thresholded_predictions.sort(key=lambda tup: tup[1],reverse=True)
-
-  # Non maximal suppression
-  nms_predictions = non_maximal_suppression(thresholded_predictions,iou_threshold)
-
-  # Draw final B-Boxes and label on input image
-  for i in range(len(nms_predictions)):
-
-      color = colors[classes.index(nms_predictions[i][2])]
-      best_class_name = nms_predictions[i][2]
-
-      # Put a class rectangle with B-Box coordinates and a class label on the image
-      assert input_image is not None
-#      input_image2= cv2.rectangle(	# OK in python3 but NG in python2
-      cv2.rectangle(
-        input_image,
-        ( nms_predictions[i][0][0], nms_predictions[i][0][1] ),
-        ( nms_predictions[i][0][2], nms_predictions[i][0][3] ),
-        color
-      )
-      assert input_image is not None
-      cv2.putText(
-        input_image,
-        best_class_name,
-        (
-         int((nms_predictions[i][0][0]+nms_predictions[i][0][2])/2),
-         int((nms_predictions[i][0][1]+nms_predictions[i][0][3])/2)
-        ),
-        cv2.FONT_HERSHEY_SIMPLEX,1,color,2)
-  return input_image, len(nms_predictions)
-
 def fpga(frame,ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred):
     preprocessed_nchwRGB = preprocessing(frame, ph_height, ph_width)
     d = preprocessed_nchwRGB.reshape(-1).astype(np.uint8).tostring()
@@ -235,30 +103,15 @@ def fpga(frame,ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devm
         sleep(0.001)
 
 # Compute the predictions on the input image
-    if True:
-        predictions = devmem_pred.read(np.float32)
-        devmem_pred.rewind()
-        assert predictions[0]==predictions[0],"invalid mem values:{}".format(predictions[:8])
+    predictions = devmem_pred.read(np.float32)
+    devmem_pred.rewind()
+    assert predictions[0]==predictions[0],"invalid mem values:{}".format(predictions[:8])
 #   _predictions________________________________________________________
 #   | 4 entries                 |1 entry |     20 entries               |
 #   | x..x | y..y | w..w | h..h | c .. c | p0 - p19      ..     p0 - p19| x 5(==num)
 #   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #   entiry size == grid_w x grid_h
- #   dets=[]
- #   for i in range(5):
- #       entries=[]
- #       off  = grid_h*grid_w* n_info_per_grid*i
- #       for j in range( n_info_per_grid):
- #           off2 = off+j*grid_h*grid_w*1
- #           entry= predictions[off2:off2+grid_h*grid_w*1].reshape(grid_h,grid_w,1)
- #           entries.append(entry)
- #       dets.append(np.concatenate(entries,axis=2))
- #   predictions = np.stack(dets,axis=2)
-#   _predictions_________________________________________
-#                          | 25 float32 words            |
-#     grid_h, grid_w, num, | x | y | w | h | c | p0..p19 |
-#   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#   predictions.shape=( 9,11,5,25)
+
     return predictions
 
 def fpga_proc(qi, qp, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred):
@@ -298,13 +151,12 @@ def main():
     fp = Process(target=fpga_proc, args=(qi, qp, ph_height, ph_width, devmem_image, devmem_start, devmem_stat, devmem_pred,))
     latest_res=[]
     fp.start()
+    start = time()
     while True:
         r,frame = cap.read()
         assert r is True and frame is not None
         if qi.full(): qi.get()
         qi.put(frame)
-
-        start = time()
         images  += 1
 
         try:
@@ -332,7 +184,7 @@ def main():
                 cv2.FONT_HERSHEY_SIMPLEX,1,
                 obj_col,
                 2)
-        colapse += time()-start
+        colapse = time()-start
         fb0.imshow('result', frame)
         sys.stdout.write('\b'*40)
         sys.stdout.write('%.3fFPS(%.3fmsec) %d objects'%(images/colapse,1000.*colapse/images,objects))
