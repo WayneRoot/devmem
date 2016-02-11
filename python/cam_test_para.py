@@ -210,7 +210,7 @@ def postprocessing(predictions,input_image,score_threshold,iou_threshold,ph_heig
         cv2.FONT_HERSHEY_SIMPLEX,1,color,2)
   return input_image, len(nms_predictions)
 
-def main():
+def main(args):
 
     # Definition of the parameters
     score_threshold = 0.3
@@ -299,19 +299,20 @@ def main():
 #     grid_h, grid_w, num, | x | y | w | h | c | p0..p19 |
 #   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #   predictions.shape=( 9,11,5,25)
+            output_image,objects = postprocessing(
+                latest_pred,frame,score_threshold,iou_threshold,ph_height,ph_width
+            )
+            fb0.imshow('result', output_image)
 
-        output_image = frame
         if args.camera_only:
             images  += 1
             colapse = time()-start
             sys.stdout.write('\b'*20)
             sys.stdout.write('%.3fFPS'%(images/colapse))
             sys.stdout.flush()
-        else:
-            output_image,objects = postprocessing(latest_pred,frame,score_threshold,iou_threshold,ph_height,ph_width)
-            pass
-        fb0.imshow('result', output_image)
+            output_image = frame
+            fb0.imshow('result', output_image)
 
 if __name__ == '__main__':
-     main() 
+     main(args) 
 
