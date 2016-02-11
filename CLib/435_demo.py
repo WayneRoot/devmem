@@ -9,6 +9,7 @@ from multiprocessing import Process, Queue
 from   pdb import *
 import dn
 import pyrealsense2 as rs
+from random import randrange, seed
 
 
 args=argparse.ArgumentParser()
@@ -27,6 +28,7 @@ args.add_argument('--cam_w',type=int,default=320)
 args.add_argument( '-d','--depth',   action='store_true')
 args=args.parse_args()
 
+seed(22222)
 assert os.path.exists('/dev/fb0') and os.path.exists('/dev/video'+str(args.videoNo))
 ph_height = 288 # placeholder height
 ph_width  = 352 # placeholder width
@@ -107,6 +109,8 @@ class D435:
         self.qi       = qi
         self.color    = color
         self.depth    = depth
+        self.w        = w
+        self.h        = h
         self.pipeline = rs.pipeline()
         config        = rs.config()
         self.align_to = rs.stream.color
@@ -171,55 +175,53 @@ class UVC:
             cap.set(3,320)  # 3:width
             cap.set(4,240)  # 4:height
         print("cam.property-set:",cap.get(3),cap.get(4),cammode)
+        self.w = cap.get(3)
+        self.h = cap.get(4)
         self.r,self.frame = self.cap.read()
         assert self.r is True
         self.cont  = True
         self.thread= None
         self.rea_time = 0
         self.pre_time = 0
+
     def read_image(self):
         rea_start = time()
         r,self.frame = self.cap.read()
         assert r is True
         self.rea_time= time() - rea_start
         return r, self.frame
+
     def prep_Qi(self):
         pre_start= time()
         preprocessed_nchwRGB = preprocessing(self.frame, 288, 352)
         if self.qi.full(): self.qi.get()
         self.qi.put(preprocessed_nchwRGB)
         self.pre_time = time() - pre_start
-    def get(self, attr):
-        return self.cap.get(attr)
+
     def _read_task(self):
         while True:
             if not self.cont:break
-#            r,self.frame = self.cap.read()
-#            assert r is True
             r, self.frame = self.read_image()
             self.prep_Qi()
         self.cap.release()
+
     def start(self):
         self.thread = threading.Thread(target=self._read_task,args=())
         self.thread.start()
         return self
+
     def stop(self):
         self.cont=False
         self.thread.join()
+
     def read(self):
-# BUG: At multi-task mode don't read from camera and only return self.frame
-#       # Use self.frame at multi-task mode
         if self.thread is None:
             r,self.frame = self.read_image()
             assert r is True
-#           self.prep_Qi()
-#       return True, self.frame
         else:
             self.r, self.frame = self.read_image()
         self.prep_Qi()
         return self.r, self.frame, self.rea_time, self.pre_time, self.rea_time + self.pre_time
-    def timer(self):
-        return self.rea_time, self.pre_time, self.rea_time + self.pre_time
 
 def box2rect(box):
     x, y, h, w = box
@@ -340,7 +342,7 @@ def fpga_proc(qi, qp, qs, ph_height, ph_width,devmem_image, devmem_start, devmem
         qs.put([wrt,exe,ret,(time()-start)/infers])
     dn.close_predictions()
 
-QUEUE_SIZE=30
+QUEUE_SIZE=3
 def main(args):
     me_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -370,12 +372,15 @@ def main(args):
     start = time()
     fpga_total = wrt_stage = exe_stage = ret_stage = loo_stage = 1.
     backgrounder(args.background, args)
+    mask = None
+    seg_colors = [[r, 100+i, randrange(100,180)] for i,r in enumerate(range(180,180-20,-1))]
     while True:
         cap_start = time()
         if video_devs == 1:
             r,frame,rea_time, pre_time, cam_time   = cap.read()
         else:
             frame, dth, dth_np, rea_time, pre_time, cam_time = cap.read()
+        if mask is None: mask = np.zeros(frame.shape, dtype=np.uint8)
         cap_time = time() - cap_start
         images  += 1
         pos_start= time()
@@ -394,18 +399,34 @@ def main(args):
         except:
             pass
 
+        mask = (mask / 2).astype(np.uint8)
         for r in latest_res:
             name, conf, bbox = r[:3]
             obj_col = colors[classes.index(r[0])]
+            seg_col = seg_colors[classes.index(r[0])]
             rect = box2rect(bbox)
+            if args.depth:
+                
+                dth_obj_m= dth_np[rect[1]:rect[3], rect[0]:rect[2]]*cap.scale
+                dth_obj_m = np.clip(dth_obj_m, 0.001, 10.000) # histogram of meter wise until 20m
+                bins, range_m = np.histogram(dth_obj_m, bins=10)
+                index_floor = np.argmax(bins)                 # range which occupy most area in bbox
+                range_floor = range_m[index_floor]
+                range_ceil  = range_m[index_floor+1]
+                indexXY = np.where((dth_obj_m>range_floor) & (dth_obj_m<range_ceil))
+                if len(indexXY[0]) == 0 and len(indexXY[1]) == 0:continue
+                meters  = dth_obj_m[indexXY].min()
+                indexXY = (indexXY[0]+rect[1], indexXY[1]+rect[0])
+                mask[indexXY[0], indexXY[1], :] = seg_col
+
             cv2.rectangle(
-                frame,
+                mask,
                 ( rect[0], rect[1] ),
                 ( rect[2], rect[3] ),
                 obj_col
             )
             cv2.putText(
-                frame,
+                mask,
                 name,
                 (int(bbox[0]), int(bbox[1])),
                 cv2.FONT_HERSHEY_SIMPLEX,1,
@@ -418,7 +439,7 @@ def main(args):
             image_path = random.choice(glob.glob(os.path.join(me_dir,'debian*.jpg')))
             backgrounder(image_path, args)
             sleep(1.0)
-        fb0.imshow('result', frame)
+        fb0.imshow('result', frame | mask)
         if args.dma:
             stages = exe_stage + ret_stage
         else:
