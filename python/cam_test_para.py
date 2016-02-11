@@ -11,6 +11,7 @@ args.add_argument('-c', '--cv',action='store_true')
 args.add_argument('-s', '--shrink',type=int,default=3,choices=[1,2,3])
 args.add_argument('-vn','--videoNo',type=int,default=0)
 args.add_argument('-bg','--background',type=str,default='debian2.jpg')
+args.add_argument('-co','--camera_only',action='store_true')
 args.add_argument('-cm','--cammode',type=str,default='qvga',choices=['qvga','vga','svga'])
 args=args.parse_args()
 
@@ -242,10 +243,12 @@ def main():
     devmem_image.rewind()
 
     # start FPGA
-    start = time()
     s = np.asarray([0x1],dtype=np.uint32).tostring()
     devmem_start.write(s)
     devmem_start.rewind()
+
+    status = np.asarray([0x2000],dtype=np.uint32)
+    start = time()
 
     latest_pred = np.zeros(11*9*5*25,dtype=np.float32)
     while True:
@@ -254,7 +257,7 @@ def main():
         # check status of FPGA
         status = devmem_stat.read(np.uint32)
         devmem_stat.rewind()
-        if status[0] == 0x2000:
+        if args.camera_only is False and status[0] == 0x2000:
             # get result
             predictions = devmem_pred.read(np.float32)
             devmem_pred.rewind()
@@ -271,10 +274,9 @@ def main():
             devmem_start.rewind()
 
             images  += 1
-            colapse += time()-start
-            start = time()
-            sys.stdout.write('\b'*40)
-            sys.stdout.write('%.3fFPS(%.3fmsec) %d objects'%(images/colapse,1000.*colapse/images,objects))
+            colapse = time()-start
+            sys.stdout.write('\b'*20)
+            sys.stdout.write('%.3fFPS'%(images/colapse))
             sys.stdout.flush()
 
 #   _predictions________________________________________________________
@@ -298,10 +300,17 @@ def main():
 #   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #   predictions.shape=( 9,11,5,25)
 
-        output_image,objects = postprocessing(latest_pred,frame,score_threshold,iou_threshold,ph_height,ph_width)
+        output_image = frame
+        if args.camera_only:
+            images  += 1
+            colapse = time()-start
+            sys.stdout.write('\b'*20)
+            sys.stdout.write('%.3fFPS'%(images/colapse))
+            sys.stdout.flush()
+        else:
+            output_image,objects = postprocessing(latest_pred,frame,score_threshold,iou_threshold,ph_height,ph_width)
+            pass
         fb0.imshow('result', output_image)
-        key = cv2.waitKey(1)
-        if key!=-1:break
 
 if __name__ == '__main__':
      main() 
