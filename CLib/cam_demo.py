@@ -19,6 +19,8 @@ args.add_argument('-th','--thread',action='store_true')
 args.add_argument('-dma',action='store_true')
 args.add_argument('-phys','--phys_addr',type=str,default='/sys/class/udmabuf/udmabuf0/phys_addr')
 args.add_argument('-cm','--cammode',type=str,default='qvga',choices=['qvga','vga','svga'])
+args.add_argument('--cam_h',type=int,default=640)
+args.add_argument('--cam_w',type=int,default=320)
 args=args.parse_args()
 
 assert os.path.exists('/dev/fb0') and os.path.exists('/dev/video0')
@@ -35,13 +37,13 @@ def backgrounder(image_path):
     fbB.close()
     os.system("figlet HST")
     print("virtual_size:",fb0.vw,fb0.vh)
+    print("camra :",args.cam_w, args.cam_h)
+    print("shrink:1/%d"%args.shrink)
+    print("DMA Mode",args.dma)
 
 fb0 = fb(shrink=args.shrink)
-#if os.system('which clear') == 0: os.system('clear')
 backgrounder(args.background)
-#os.system("banner HST")
 if os.system('which setterm') == 0: os.system('setterm -blank 0;echo setterm -blank 0')
-#print("virtual_size:",fb0.vw,fb0.vh)
 
 image_area_addr = 0xe018c000
 if args.dma and os.path.exists(args.phys_addr):
@@ -145,7 +147,6 @@ def preprocessing(input_image,ph_height,ph_width):
   return image_nchwRGB
 
 def fpga(frame,ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred):
-    head  = time()
     start = time()
     preprocessed_nchwRGB = preprocessing(frame, ph_height, ph_width)
     d = preprocessed_nchwRGB.reshape(-1).astype(np.uint8).tostring()
@@ -179,19 +180,60 @@ def fpga(frame,ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devm
 #   entiry size == grid_w x grid_h
 
     ret = time() - start
-    tim = time() - head
-    return predictions, wrt, exe, ret, tim
+    return predictions, wrt, exe, ret
+
+def fpga_dma(frame,ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred):
+    wrt = exe = ret = 0.
+    status = devmem_stat.read(np.uint32)
+    devmem_stat.rewind()
+
+    predictions = None
+    if status[0] == 0x02000:   # CNN Idle
+        start = time()
+        predictions = dn.get_predictions()  # get result
+        assert predictions[0]==predictions[0],"invalid mem values:{}".format(predictions[:8])
+        ret = time() - start
+        s = np.asarray([0x1],dtype=np.uint32).tostring()
+        devmem_start.write(s)
+        devmem_start.rewind()               # restart
+        sleep(0.001)
+
+    if status[0] != 0x13000:    # DMA Idle
+        start = time()
+        preprocessed_nchwRGB = preprocessing(frame, ph_height, ph_width)
+        d = preprocessed_nchwRGB.reshape(-1).astype(np.uint8).tostring()
+        devmem_image.write(d)
+        devmem_image.rewind()               # write to DMA area
+        wrt = time() - start
+
+# Compute the predictions on the input image
+#   _predictions________________________________________________________
+#   | 4 entries                 |1 entry |     20 entries               |
+#   | x..x | y..y | w..w | h..h | c .. c | p0 - p19      ..     p0 - p19| x 5(==num)
+#   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#   entiry size == grid_w x grid_h
+    return predictions, wrt, exe, ret
 
 def fpga_proc(qi, qp, qs, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred):
     print 'start fpga processing'
     dn.open_predictions(0xe0000000,11*9*125)
+    exe_start = time()
     while True:
         frame = qi.get()
-        latest, wrt, exe, ret, tim = fpga(frame, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred)
-        if qp.full(): qp.get()
-        qp.put(latest)
+        if args.dma:
+            latest, wrt, exe, ret = fpga_dma(
+                frame, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred)
+            if latest is not None:
+                exe = time() - exe_start
+                exe_start = time()
+        else:
+            latest, wrt, exe, ret = fpga(
+                frame, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred)
+        if latest is not None:
+            if qp.full(): qp.get()
+            qp.put(latest)
         if qs.full(): qs.get()
-        qs.put([wrt,exe,ret,tim])
+        qs.put([wrt,exe,ret])
     dn.close_predictions()
 
 def main():
@@ -217,7 +259,8 @@ def main():
             cap.set(3,320)  # 3:width
             cap.set(4,240)  # 4:height
         print("cam.property-set:",cap.get(3),cap.get(4),args.cammode)
-    print("shrink:1/%d"%args.shrink)
+        args.cam_w = cap.get(3)
+        args.cam_h = cap.get(4)
 
     objects = images = 0
     colapse = 0
@@ -247,8 +290,10 @@ def main():
             pass
 
         try:
-            wrt_stage, exe_stage, ret_stage, fpga_total = qs.get_nowait()
-            #fpga_total = wrt_stage + exe_stage + ret_stage
+            wrt, exe, ret= qs.get_nowait()
+            if wrt > 0. : wrt_stage = wrt
+            if exe > 0. : exe_stage = exe
+            if ret > 0. : ret_stage = ret
         except:
             pass
 
@@ -275,10 +320,16 @@ def main():
             backgrounder(image_path)
             sleep(1.0)
         fb0.imshow('result', frame)
+        if args.dma:
+            stages = exe_stage
+        else:
+            stages = wrt_stage + exe_stage + ret_stage
         sys.stdout.write('\b'*80)
-        sys.stdout.write('%.3fFPS(%.3fmsec) %d objects (@fpga %.3fmsec = %.1f %.1f %.1f)'%(
+        sys.stdout.write('%4.1fFPS(%5.1fmsec) %2d objects %4.1fFPS fpga(%5.1f%5.1f%5.1f)'%(
             images/colapse,1000.*colapse/images,objects,
-            1000.*fpga_total, 1000.*wrt_stage, 1000.*exe_stage, 1000.*ret_stage))
+            1./(stages+1e-10),
+            1000.*wrt_stage, 1000.*exe_stage, 1000.*ret_stage))
+        if images == 1:sys.stdout.write('\b'*160)
         sys.stdout.flush()
 
 if __name__ == '__main__':
