@@ -32,7 +32,7 @@ ph_height = 288 # placeholder height
 ph_width  = 352 # placeholder width
 ph_chann  = 3
 
-def backgrounder(image_path):
+def backgrounder(image_path, args):
     if os.system('which clear') == 0: os.system('clear')
     fbB = fb(shrink=1)
     assert os.path.exists(image_path)
@@ -41,10 +41,10 @@ def backgrounder(image_path):
     fbB.close()
     os.system("figlet HST")
     print("virtual_size:",fb0.vw,fb0.vh)
+    print("/dev/video* :",args.video_devs)
     print("camra :",args.cam_w, args.cam_h, "shrink:1/%d"%args.shrink, "thread:", args.thread, "DMA Mode:", args.dma)
 
 fb0 = fb(shrink=args.shrink)
-backgrounder(args.background)
 if os.system('which setterm') == 0: os.system('setterm -blank 0;echo setterm -blank 0')
 
 image_area_addr = 0xe018c000
@@ -54,6 +54,7 @@ if args.dma and os.path.exists(args.phys_addr):
     exec(cmd)
 else:
     args.dma=False
+
 print("image_area_addr:%x"%image_area_addr)
 devmem_image = devmem(image_area_addr, ph_height*ph_width*ph_chann)
 devmem_start = devmem(0xe0c00004,4)
@@ -123,6 +124,7 @@ class D435:
             sys.stdout.write('%10d/%d'%(i,self.warmup))
             sys.stdout.flush()
             sleep(1)
+        print("\nup")
         print("depth_sensor_scale:",self.scale)
 
     def prep_Qi(self):
@@ -337,7 +339,7 @@ def fpga_proc(qi, qp, qs, ph_height, ph_width,devmem_image, devmem_start, devmem
     dn.close_predictions()
 
 QUEUE_SIZE=30
-def main():
+def main(args):
     me_dir = os.path.dirname(os.path.abspath(__file__))
 
     # Definition of the parameters
@@ -348,10 +350,14 @@ def main():
     qp = Queue(QUEUE_SIZE)
     qs = Queue(QUEUE_SIZE)
 
-    cap = D435(qi, color=True, depth=args.depth)
-
-    args.cam_w = 640
-    args.cam_h = 480
+    video_devs = len(glob.glob('/dev/video*'))
+    if video_devs==1:
+        cap = UVC(qi, deviceNo=args.videoNo, cammode=args.cammode)
+    else:
+        cap = D435(qi, color=True, depth=args.depth)
+        args.cam_w = 640
+        args.cam_h = 480
+    args.video_devs = video_devs
 
     sum_cam = objects = images = 0
     colapse = 0
@@ -361,9 +367,13 @@ def main():
     fp.start()
     start = time()
     fpga_total = wrt_stage = exe_stage = ret_stage = loo_stage = 1.
+    backgrounder(args.background, args)
     while True:
         cap_start = time()
-        frame, dth, dth_np, rea_time, pre_time, cam_time = cap.read()
+        if video_devs == 1:
+            r,frame,rea_time, pre_time, cam_time   = cap.read()
+        else:
+            frame, dth, dth_np, rea_time, pre_time, cam_time = cap.read()
         cap_time = time() - cap_start
         images  += 1
         pos_start= time()
@@ -404,7 +414,7 @@ def main():
         colapse = time()-start
         if (int(colapse)%args.keep)==0:
             image_path = random.choice(glob.glob(os.path.join(me_dir,'debian*.jpg')))
-            backgrounder(image_path)
+            backgrounder(image_path, args)
             sleep(1.0)
         fb0.imshow('result', frame)
         if args.dma:
@@ -431,5 +441,5 @@ def main():
         sys.stdout.flush()
 
 if __name__ == '__main__':
-     main() 
+     main(args) 
 
