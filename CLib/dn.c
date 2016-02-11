@@ -5,6 +5,11 @@
 #include <float.h>
 #include <stdlib.h>
 
+#########################################################
+# runtime args value in comments are using dog.jpg
+# featuremap_8.txt      : output of feature map of CNN
+# featuremap_conv_8.txt : output of feature map of Norm
+#########################################################
 typedef struct{
     float x, y, w, h;
 } box;
