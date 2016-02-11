@@ -27,7 +27,7 @@ if True:
     os.system('clear')
     if os.system('which clear') == 0: os.system('clear')
     fbB.imshow('back',background)
-    print "Hitachi Solutions Technology"
+    print("Hitachi Solutions Technology")
     if os.system('which setterm') == 0: os.system('setterm -blank 0;echo setterm -blank 0')
     fbB = fb(shrink=1)
     fbB.close()

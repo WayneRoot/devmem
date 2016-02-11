@@ -5,7 +5,7 @@ from time import time
 
 class fb():
     def __init__(self,dev_fb='/dev/fb0',shrink=2):
-        self.fb = open(dev_fb,"w")
+        self.fb = open(dev_fb,"wb")
         virtual_size='/sys/class/graphics/fb0/virtual_size'
         assert os.path.exists(virtual_size)
         with open(virtual_size) as f:
