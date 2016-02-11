@@ -1,0 +1,9 @@
+#!/bin/bash
+cd area51
+export LD_LIBRARY_PATH=devmem/CLib
+banner AREA51
+./yv2_parse.py
+
+python ./cam_demo.py
+
+
