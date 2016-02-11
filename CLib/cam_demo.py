@@ -321,15 +321,15 @@ def main():
             sleep(1.0)
         fb0.imshow('result', frame)
         if args.dma:
-            stages = exe_stage
+            stages = exe_stage + ret_stage
         else:
             stages = wrt_stage + exe_stage + ret_stage
+        if stages == 0.: stages=1.
         sys.stdout.write('\b'*80)
         sys.stdout.write('%4.1fFPS(%5.1fmsec) %2d objects %4.1fFPS fpga(%5.1f%5.1f%5.1f)'%(
             images/colapse,1000.*colapse/images,objects,
-            1./(stages+1e-10),
+            1./(stages),
             1000.*wrt_stage, 1000.*exe_stage, 1000.*ret_stage))
-        if images == 1:sys.stdout.write('\b'*160)
         sys.stdout.flush()
 
 if __name__ == '__main__':
