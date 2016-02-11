@@ -95,6 +95,7 @@ def preprocessing(input_image,ph_height,ph_width):
   return image_nchwRGB
 
 def fpga(frame,ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred):
+    start = time()
     preprocessed_nchwRGB = preprocessing(frame, ph_height, ph_width)
     d = preprocessed_nchwRGB.reshape(-1).astype(np.uint8).tostring()
     devmem_image.write(d)
@@ -103,6 +104,8 @@ def fpga(frame,ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devm
     s = np.asarray([0x1],dtype=np.uint32).tostring()
     devmem_start.write(s)
     devmem_start.rewind()
+    wrt = time() - start
+    start = time()
     sleep(0.005)
     for i in range(10000):
         status = devmem_stat.read(np.uint32)
@@ -110,10 +113,13 @@ def fpga(frame,ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devm
         if status[0] == 0x2000:
             break
         sleep(0.001)
+    exe = time() - start
+    start = time()
 
 # Compute the predictions on the input image
-    predictions = devmem_pred.read(np.float32)
-    devmem_pred.rewind()
+    #predictions = devmem_pred.read(np.float32)
+    predictions = dn.get_predictions()
+    #devmem_pred.rewind()
     assert predictions[0]==predictions[0],"invalid mem values:{}".format(predictions[:8])
 #   _predictions________________________________________________________
 #   | 4 entries                 |1 entry |     20 entries               |
@@ -121,15 +127,20 @@ def fpga(frame,ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devm
 #   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #   entiry size == grid_w x grid_h
 
-    return predictions
+    ret = time() - start
+    return predictions, wrt, exe, ret
 
-def fpga_proc(qi, qp, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred):
+def fpga_proc(qi, qp, qs, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred):
     print 'start fpga processing'
+    dn.open_predictions(0xe0000000,11*9*125)
     while True:
         frame = qi.get()
-        latest = fpga(frame, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred)
+        latest, wrt, exe, ret = fpga(frame, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred)
         if qp.full(): qp.get()
         qp.put(latest)
+        if qs.full(): qs.get()
+        qs.put([wrt,exe,ret])
+    dn.close_predictions()
 
 def main():
     me_dir = os.path.dirname(os.path.abspath(__file__))
@@ -158,10 +169,12 @@ def main():
     verbose=False
     qi = Queue(3)
     qp = Queue(3)
-    fp = Process(target=fpga_proc, args=(qi, qp, ph_height, ph_width, devmem_image, devmem_start, devmem_stat, devmem_pred,))
+    qs = Queue(3)
+    fp = Process(target=fpga_proc, args=(qi, qp, qs, ph_height, ph_width, devmem_image, devmem_start, devmem_stat, devmem_pred,))
     latest_res=[]
     fp.start()
     start = time()
+    fpga_total = wrt_stage = exe_stage = ret_stage = 0
     while True:
         r,frame = cap.read()
         assert r is True and frame is not None
@@ -175,6 +188,12 @@ def main():
             res = dn.postprocessing(predictions,im_w,im_h,0.5,0.5)
             objects = len(res)
             latest_res = res
+        except:
+            pass
+
+        try:
+            wrt_stage, exe_stage, ret_stage = qs.get_nowait()
+            fpga_total = wrt_stage + exe_stage + ret_stage
         except:
             pass
 
@@ -201,8 +220,10 @@ def main():
             backgrounder(image_path)
             sleep(1.0)
         fb0.imshow('result', frame)
-        sys.stdout.write('\b'*40)
-        sys.stdout.write('%.3fFPS(%.3fmsec) %d objects'%(images/colapse,1000.*colapse/images,objects))
+        sys.stdout.write('\b'*80)
+        sys.stdout.write('%.3fFPS(%.3fmsec) %d objects (@fpga %.3fmsec = %.3f %.3f %.3f)'%(
+            images/colapse,1000.*colapse/images,objects,
+            1000.*fpga_total, 1000.*wrt_stage, 1000.*exe_stage, 1000.*ret_stage))
         sys.stdout.flush()
 
 if __name__ == '__main__':

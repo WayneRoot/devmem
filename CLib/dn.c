@@ -5,11 +5,15 @@
 #include <float.h>
 #include <stdlib.h>
 
-#########################################################
-# runtime args value in comments are using dog.jpg
-# featuremap_8.txt      : output of feature map of CNN
-# featuremap_conv_8.txt : output of feature map of Norm
-#########################################################
+#include <unistd.h>
+#include <errno.h>
+#include <signal.h>
+#include <fcntl.h>
+#include <ctype.h>
+#include <termios.h>
+#include <sys/types.h>
+#include <sys/mman.h>
+  
 typedef struct{
     float x, y, w, h;
 } box;
@@ -344,4 +348,49 @@ void free_detections(detection *dets, int n)
 }
 
 void free_any(void *ptr){free(ptr);}
+
+#define FATAL do { fprintf(stderr, "Error at line %d, file %s (%d) [%s]\n", \
+  __LINE__, __FILE__, errno, strerror(errno)); exit(1); } while(0)
+ 
+#define MAP_SIZE 4096UL
+#define MAP_MASK (MAP_SIZE - 1)
+
+#define READ_TYPE float
+static void *map_base, *virt_addr; 
+static READ_TYPE *req_buf;
+static int mem_fd;
+static size_t req_words;
+
+void open_predictions(size_t target, size_t req_words_) {
+    int i;
+	unsigned long read_result, writeval;
+    req_words = req_words_;
+    req_buf=(READ_TYPE *)calloc(req_words,sizeof(float));
+	
+    if((mem_fd = open("/dev/mem", O_RDWR | O_SYNC)) == -1) FATAL;
+    printf("/dev/mem opened.\n"); fflush(stdout);
+    
+    /* Map one page */
+    size_t map_size = (req_words*sizeof(READ_TYPE)/MAP_SIZE + 1)*MAP_SIZE;
+    map_base = mmap(0, map_size, PROT_READ | PROT_WRITE, MAP_SHARED, mem_fd, target & ~MAP_MASK);
+    if(map_base == (void *) -1) FATAL;
+    printf("Memory mapped at address %p.\n", map_base); fflush(stdout);
+
+    virt_addr = map_base + (target & MAP_MASK);
+}
+
+void read_predictions(READ_TYPE *req_buf) {
+    register int i;
+    for(i=0;i<req_words;i++){
+        req_buf[i] = *((READ_TYPE *)virt_addr+i);
+    }
+    lseek(mem_fd,0,SEEK_SET);
+}
+
+void close_predictions(){
+    printf("/dev/mem closed.\n"); fflush(stdout);
+	if(munmap(map_base, MAP_SIZE) == -1) FATAL;
+    close(mem_fd);
+    free(req_buf);
+}
 

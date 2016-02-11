@@ -110,6 +110,20 @@ def postprocessing(predictions, im_w, im_h, score_threshold, iou_threshold):
     free_detections(dets, num)
     return result
 
+predictions = np.zeros(11*9*125, dtype=np.float32)
+
+open_predictions = lib.open_predictions
+open_predictions.argtypes = [c_size_t, c_size_t]
+
+read_predictions = lib.read_predictions
+read_predictions.restype = POINTER(c_float)
+
+close_predictions = lib.close_predictions
+
+def get_predictions():
+    read_predictions(predictions.ctypes.data_as(POINTER(c_float)))
+    return predictions
+
 def dn_main():
 
     filename = 'featuremap_8.txt'
