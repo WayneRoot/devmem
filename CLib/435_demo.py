@@ -113,31 +113,68 @@ class D435:
         self.h        = h
         self.pipeline = rs.pipeline()
         config        = rs.config()
-        self.align_to = rs.stream.color
-        self.align    = rs.align(self.align_to)
-        if color: config.enable_stream(rs.stream.color, w, h, rs.format.bgr8, fps)
-        if depth: config.enable_stream(rs.stream.depth, w, h, rs.format.z16,  fps)
+      #  self.align_to = rs.stream.color
+      #  self.align    = rs.align(self.align_to)
+        config.enable_stream(rs.stream.color, w, h, rs.format.bgr8, fps)
         profile = self.pipeline.start(config)
         self.scale    = profile.get_device().first_depth_sensor().get_depth_scale()
         self.hwc_array= self.depth_frame = self.depth_array = None
         self.rea_time = self.pre_time = 0
-        self.warmup   = warmup
-        print("warm up ...")
-        sleep(3)
-        for i in range(self.warmup):
-            sys.stdout.write('\b'*20)
-            sys.stdout.write('%10d/%d'%(i,self.warmup))
-            sys.stdout.flush()
-            frames = self.pipeline.wait_for_frames()
-            sleep(0.2)
-        print("\nup")
+        self.warmup   = warmup+1
         print("depth_sensor_scale:",self.scale)
+        self.warm_up()
+        if depth:
+            self.release()
+            self.pipeline = rs.pipeline()
+            config        = rs.config()
+            self.align_to = rs.stream.color
+            self.align    = rs.align(self.align_to)
+            config.enable_stream(rs.stream.depth, w, h, rs.format.z16,  fps)
+            profile       = self.pipeline.start(config)
+            self.scale    = profile.get_device().first_depth_sensor().get_depth_scale()
+            if not self.warm_up():sys.exit(-1)
+            self.release()
+            self.pipeline = rs.pipeline()
+            config        = rs.config()
+            self.align_to = rs.stream.color
+            self.align    = rs.align(self.align_to)
+            if color: config.enable_stream(rs.stream.color, w, h, rs.format.bgr8, fps)
+            if depth: config.enable_stream(rs.stream.depth, w, h, rs.format.z16,  fps)
+            profile       = self.pipeline.start(config)
+            self.scale    = profile.get_device().first_depth_sensor().get_depth_scale()
+            if not self.warm_up():sys.exit(-1)
+
+    def warm_up(self):
+        print("warm up phase1 ...")
+        sleep(3)
+        print("warm up phase2 ...")
+        up = False
+        for j in range(5):
+            try:
+                for i in range(self.warmup):
+                    sys.stdout.write('\b'*30)
+                    sys.stdout.write('%d:%10d/%d'%(j,i,self.warmup))
+                    sys.stdout.flush()
+                    frames = self.pipeline.wait_for_frames()
+                    #sleep(0.2)
+            except:
+                sleep(1)
+                continue
+            else:
+                up = True
+                break
+        if up:
+            print("\nup")
+            return True
+        else:
+            #self.release()
+            return False
 
     def prep_Qi(self):
         pre_start= time()
         preprocessed_nchwRGB = preprocessing(self.hwc_array, 288, 352)
         if self.qi.full(): self.qi.get()
-        self.qi.put(preprocessed_nchwRGB)
+        self.qi.put([preprocessed_nchwRGB, self.depth_array])
         self.pre_time = time() - pre_start
 
     def read(self):
@@ -328,7 +365,7 @@ def fpga_proc(qi, qp, qs, ph_height, ph_width,devmem_image, devmem_start, devmem
     start = time()
     while True:
         infers += 1
-        preprocessed_nchwRGB = qi.get()
+        preprocessed_nchwRGB, dth_array = qi.get()
         if args.dma:
             latest, wrt, exe, ret = core.fpga_dma(
                 preprocessed_nchwRGB, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred)
@@ -337,7 +374,7 @@ def fpga_proc(qi, qp, qs, ph_height, ph_width,devmem_image, devmem_start, devmem
                 preprocessed_nchwRGB, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred)
         if latest is not None:
             if qp.full(): qp.get()
-            qp.put(latest)
+            qp.put([latest, dth_array])
         if qs.full(): qs.get()
         qs.put([wrt,exe,ret,(time()-start)/infers])
     dn.close_predictions()
@@ -380,13 +417,14 @@ def main(args):
             r,frame,rea_time, pre_time, cam_time   = cap.read()
         else:
             frame, dth, dth_np, rea_time, pre_time, cam_time = cap.read()
-        if mask is None: mask = np.zeros(frame.shape, dtype=np.uint8)
+        if mask is None: mask = np.zeros((480,640,3), dtype=np.uint8)
+        #if mask is None: mask = np.zeros(frame.shape, dtype=np.uint8)
         cap_time = time() - cap_start
         images  += 1
         pos_start= time()
 
         try:
-            predictions= qp.get_nowait()
+            predictions, _= qp.get_nowait()
             im_h, im_w = frame.shape[:2]
             res = dn.postprocessing(predictions,im_w,im_h,0.5,0.5)
             objects = len(res)
@@ -404,20 +442,21 @@ def main(args):
             name, conf, bbox = r[:3]
             obj_col = colors[classes.index(r[0])]
             seg_col = seg_colors[classes.index(r[0])]
-            rect = box2rect(bbox)
+            rect = box2rect(bbox)   # x1, y1, x2, y2 := left_top right_bottom
             if args.depth:
                 
-                dth_obj_m= dth_np[rect[1]:rect[3], rect[0]:rect[2]]*cap.scale
+                dth_obj_m= dth_np[rect[1]:rect[3], rect[0]:rect[2]]*cap.scale  # y1:y2, x1:x2 area
                 dth_obj_m = np.clip(dth_obj_m, 0.001, 10.000) # histogram of meter wise until 20m
                 bins, range_m = np.histogram(dth_obj_m, bins=10)
                 index_floor = np.argmax(bins)                 # range which occupy most area in bbox
                 range_floor = range_m[index_floor]
                 range_ceil  = range_m[index_floor+1]
-                indexXY = np.where((dth_obj_m>range_floor) & (dth_obj_m<range_ceil))
-                if len(indexXY[0]) == 0 and len(indexXY[1]) == 0:continue
-                meters  = dth_obj_m[indexXY].min()
-                indexXY = (indexXY[0]+rect[1], indexXY[1]+rect[0])
-                mask[indexXY[0], indexXY[1], :] = seg_col
+                indexYX = np.where((dth_obj_m>range_floor) & (dth_obj_m<range_ceil))
+                if len(indexYX[0]) == 0 and len(indexYX[1]) == 0:continue   # indexYX := y,x
+                meters  = dth_obj_m[indexYX].min()
+                indexYX = (indexYX[0]+rect[1], indexYX[1]+rect[0])          # y+=y1, x+=x1
+                mask[indexYX[0], indexYX[1], :] = seg_col
+                name = "%s(%.2fm)"%(name,meters)
 
             cv2.rectangle(
                 mask,
