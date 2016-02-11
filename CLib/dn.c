@@ -36,6 +36,8 @@ typedef struct detection{
 typedef struct m_layer{
     int outputs;
     float *output;
+    float *mean_output;
+    float moving_alpha;
     float *biases;
     int batch;
     int softmax;
@@ -156,6 +158,7 @@ void get_region_detections(m_layer l, int w, int h, int netw, int neth, float th
 {
     int i,j,n,z;
     float *predictions = l.output;
+    float *mean_pred   = l.mean_output;
     for (i = 0; i < l.w*l.h; ++i){
         int row = i / l.w;
         int col = i % l.w;
@@ -168,6 +171,12 @@ void get_region_detections(m_layer l, int w, int h, int netw, int neth, float th
             int box_index  = entry_index(l, 0, n*l.w*l.h + i, 0);
             int mask_index = entry_index(l, 0, n*l.w*l.h + i, 4);
             float scale = l.background ? 1 : predictions[obj_index];
+            float diffm = scale - mean_pred[obj_index];
+            if (diffm<0){
+                mean_pred[obj_index] +=l.moving_alpha * diffm;
+                scale = mean_pred[obj_index];
+            }else
+                mean_pred[obj_index] = scale;
             dets[index].bbox = get_region_box(predictions, l.biases, n, box_index, col, row, l.w, l.h, l.w*l.h);
             dets[index].objectness = scale > thresh ? scale : 0;
             if(dets[index].mask){

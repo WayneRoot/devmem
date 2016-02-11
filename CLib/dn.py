@@ -32,6 +32,8 @@ class DETECTION(Structure):
 class REGION_LAYER(Structure):
     _fields_ = [("outputs", c_int),
                 ("output",  POINTER(c_float)),
+                ("mean_output",  POINTER(c_float)),
+                ("moving_alpha", c_float),
                 ("biases",  POINTER(c_float)),
                 ("batch",   c_int),
                 ("softmax", c_int),
@@ -69,12 +71,16 @@ do_nms_obj.argtypes = [POINTER(DETECTION), c_int, c_int, c_float]
 def postprocessing(predictions, im_w, im_h, score_threshold, iou_threshold):
 
     p_predictions = predictions.ctypes.data_as(POINTER(c_float))
+    mean_pred     = np.zeros(predictions.shape,dtype=np.float32)
+    p_mean_pred   = mean_pred.ctypes.data_as(POINTER(c_float))
     biases = np.asarray([1.08,1.19,  3.42,4.41,  6.63,11.38,  9.42,5.11,  16.62,10.52],dtype=np.float32)
     p_biases = biases.ctypes.data_as(POINTER(c_float))
 
     lay = REGION_LAYER(
         11*9*5*25,      # outputs 11x9x5*25
         p_predictions,  # output
+        p_mean_pred,    # mean_output
+        0.001,          # moving_alpha
         p_biases,       # biases
         1,              # batch
         1,              # softmax

@@ -15,6 +15,7 @@ args.add_argument('-c', '--cv',action='store_true')
 args.add_argument('-s', '--shrink',type=int,default=2,choices=[1,2,3])
 args.add_argument('-bg','--background',type=str,default='debian2.jpg')
 args.add_argument('-k','--keep',type=int,default=600)
+args.add_argument('-th','--thread',action='store_true')
 args.add_argument('-cm','--cammode',type=str,default='qvga',choices=['qvga','vga','svga'])
 args=args.parse_args()
 
@@ -71,6 +72,32 @@ colors = [(254.0, 254.0, 254), (239.8, 211.6, 127),
 
 # YOLOv2 anchor of Bounding-Boxes
 anchors = [1.08,1.19,  3.42,4.41,  6.63,11.38,  9.42,5.11,  16.62,10.52]
+
+class UVC:
+    def __init__(self,deviceNo=0):
+        assert os.path.exists('/dev/video'+str(deviceNo))
+        self.cap = cv2.VideoCapture(deviceNo)
+        assert self.cap is not None
+        self.r,self.frame = self.cap.read()
+        assert self.r is True
+        self.cont  = True
+        self.thread= None
+    def _read_task(self):
+        while True:
+            if not self.cont:break
+            r,self.frame = self.cap.read()
+            assert r is True
+            sleep(0.003)
+        self.cap.release()
+    def start(self):
+        self.thread = threading.Thread(target=self._read_task,args=())
+        self.thread.start()
+        return self
+    def stop(self):
+        self.cont=False
+        self.thread.join()
+    def read(self):
+        return self.r, self.frame
 
 def box2rect(box):
     x, y, h, w = box
@@ -149,19 +176,22 @@ def main():
     score_threshold = 0.3
     iou_threshold = 0.3
 
-    cap = cv2.VideoCapture(0)
-    assert cap is not None
-    print("cam.property-default:",cap.get(3),cap.get(4))
-    if args.cammode=='vga':
-        cap.set(3,640)  # 3:width
-        cap.set(4,480)  # 4:height
-    elif args.cammode=='svga':
-        cap.set(3,800)  # 3:width
-        cap.set(4,600)  # 4:height
-    elif args.cammode=='qvga':
-        cap.set(3,320)  # 3:width
-        cap.set(4,240)  # 4:height
-    print("cam.property-set:",cap.get(3),cap.get(4),args.cammode)
+    if args.thread:
+        cap = UVC().start()
+    else:
+        cap = cv2.VideoCapture(0)
+        assert cap is not None
+        print("cam.property-default:",cap.get(3),cap.get(4))
+        if args.cammode=='vga':
+            cap.set(3,640)  # 3:width
+            cap.set(4,480)  # 4:height
+        elif args.cammode=='svga':
+            cap.set(3,800)  # 3:width
+            cap.set(4,600)  # 4:height
+        elif args.cammode=='qvga':
+            cap.set(3,320)  # 3:width
+            cap.set(4,240)  # 4:height
+        print("cam.property-set:",cap.get(3),cap.get(4),args.cammode)
     print("shrink:1/%d"%args.shrink)
 
     objects = images = 0
