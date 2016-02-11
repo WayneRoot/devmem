@@ -24,6 +24,9 @@ ph_width  = 352 # placeholder width
 ph_chann  = 3
 
 def backgrounder(image_path):
+    if os.system('which clear') == 0: os.system('clear')
+    os.system("banner HST")
+    print("virtual_size:",fb0.vw,fb0.vh)
     fbB = fb(shrink=1)
     assert os.path.exists(image_path)
     background = cv2.imread(image_path)
@@ -43,9 +46,9 @@ if args.keep > 0:
     t.start()
 
 fb0 = fb(shrink=args.shrink)
-if os.system('which clear') == 0: os.system('clear')
+#if os.system('which clear') == 0: os.system('clear')
 backgrounder(args.background)
-os.system("banner HST")
+#os.system("banner HST")
 if os.system('which setterm') == 0: os.system('setterm -blank 0;echo setterm -blank 0')
 print("virtual_size:",fb0.vw,fb0.vh)
 
