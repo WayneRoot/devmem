@@ -208,7 +208,7 @@ def postprocessing(predictions,input_image,score_threshold,iou_threshold,ph_heig
         cv2.FONT_HERSHEY_SIMPLEX,1,color,2)
   return input_image, len(nms_predictions)
 
-def fpga(frame,ph_height, ph_width):
+def fpga(frame,ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred):
     preprocessed_nchwRGB = preprocessing(frame, ph_height, ph_width)
     d = preprocessed_nchwRGB.reshape(-1).astype(np.uint8).tostring()
     devmem_image.write(d)
@@ -283,7 +283,7 @@ def main():
         start = time()
         images  += 1
 # call fpga
-        latest = fpga(frame,ph_height, ph_width)
+        latest = fpga(frame,ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred)
         output_image,objects = postprocessing(latest,frame,score_threshold,iou_threshold,ph_height,ph_width)
         colapse += time()-start
         fb0.imshow('result', output_image)
