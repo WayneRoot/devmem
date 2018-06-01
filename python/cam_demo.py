@@ -254,13 +254,10 @@ def fpga(frame,ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devm
     return predictions
 
 def fpga_proc(qi, qp, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred):
-    print 'start fpga_proc'
+    print 'start fpga processing'
     while True:
         frame = qi.get()
-    #    print frame.shape, frame[0][0]
-        #latest =np.zeros((9,11,5,25),dtype=np.float32)
         latest = fpga(frame, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred)
-        sleep(0.3)
         if qp.full(): qp.get()
         qp.put(latest)
 
