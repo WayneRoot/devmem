@@ -4,6 +4,7 @@ from   devmemX import devmem
 import cv2
 from time import sleep,time
 from fbdraw import fb
+from multiprocessing import Process, Queue
 from   pdb import *
 
 args=argparse.ArgumentParser()
@@ -217,7 +218,7 @@ def fpga(frame,ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devm
     s = np.asarray([0x1],dtype=np.uint32).tostring()
     devmem_start.write(s)
     devmem_start.rewind()
-    sleep(0.020)
+    sleep(0.005)
     for i in range(10000):
         status = devmem_stat.read(np.uint32)
         devmem_stat.rewind()
@@ -252,6 +253,17 @@ def fpga(frame,ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devm
 #   predictions.shape=( 9,11,5,25)
     return predictions
 
+def fpga_proc(qi, qp, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred):
+    print 'start fpga_proc'
+    while True:
+        frame = qi.get()
+    #    print frame.shape, frame[0][0]
+        #latest =np.zeros((9,11,5,25),dtype=np.float32)
+        latest = fpga(frame, ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred)
+        sleep(0.3)
+        if qp.full(): qp.get()
+        qp.put(latest)
+
 def main():
 
     # Definition of the parameters
@@ -277,13 +289,24 @@ def main():
     colapse = 0
     verbose=False
     latest =np.zeros((grid_h,grid_w,5,25),dtype=np.float32)
+    qi = Queue(3)
+    qp = Queue(3)
+    fp = Process(target=fpga_proc, args=(qi, qp, ph_height, ph_width, devmem_image, devmem_start, devmem_stat, devmem_pred,))
+    fp.start()
     while True:
         r,frame = cap.read()
         assert r is True and frame is not None
+        if qi.full(): qi.get()
+        qi.put(frame)
+
         start = time()
         images  += 1
-# call fpga
-        latest = fpga(frame,ph_height, ph_width,devmem_image, devmem_start, devmem_stat, devmem_pred)
+
+        try:
+            latest = qp.get_nowait()
+        except:
+            pass
+
         output_image,objects = postprocessing(latest,frame,score_threshold,iou_threshold,ph_height,ph_width)
         colapse += time()-start
         fb0.imshow('result', output_image)
