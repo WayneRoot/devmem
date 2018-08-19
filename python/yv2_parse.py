@@ -122,8 +122,8 @@ for loadNo in range(2):
         offset+=out_ch
 
         # foldint Scale and Bias
-        Scaling = gamma_buff / np.sqrt( variance_buff )
-        Biassed = gamma_buff * mean_buff / np.sqrt( variance_buff )
+        Scaling = gamma_buff / (np.sqrt( variance_buff ) + 0.000001)
+        Biassed = -1. * gamma_buff * mean_buff / (np.sqrt( variance_buff ) + 0.000001) + bias_buff
     #    SB_buff = np.zeros((in_ch, out_ch, 2), dtype=np.float32)
         SB_buff = np.zeros((out_ch, 2), dtype=np.float32)
         if loadNo == 1:
