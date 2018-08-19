@@ -31,10 +31,10 @@ class devmem():
         self.mem.flush(0,0)
         return self
 
-    def read(self, type):
+    def read(self, types):
         assert self.length<=4, 'length > 4 causes system freeze'
         datas = self.mem.read(self.length)
-        array = np.fromstring(datas,dtype=np.uint8)
+        array = np.fromstring(datas,dtype=types)
         #if self.verbose:print("Value at address %s : %s"%(hex(self.target_adr),hex(ii)))
         #if self.verbose:print("Value at address %s : %s"%(hex(self.target_adr),float(ii)))
         if self.verbose:print("Value at address %s :"%(hex(self.target_adr)),array)
@@ -46,9 +46,10 @@ if __name__=='__main__':
     args = argparse.ArgumentParser('devmem')
     args.add_argument("target_adr", type=s2i, default=0x0)
     args = args.parse_args()
-    d = np.asarray([0.5, 1],dtype=np.float32)
+    d = np.arange(0,1024).astype(np.float32)
+    #d = np.asarray([0.5, 1.2],dtype=np.float32)
     d = d.tostring()
     #print(len(d))
     #d = bytes(d)
-    #devmem(args.target_adr,len(d)).write(d).close()
-    devmem(args.target_adr,4).read(np.float32)
+    devmem(args.target_adr,len(d)).write(d).close()
+    #devmem(args.target_adr,2).read(np.uint8)
