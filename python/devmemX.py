@@ -44,7 +44,10 @@ class devmem():
         for i in range(0, self.length, type_bytes):
             datas = self.mem.read(type_bytes)
             array = np.fromstring(datas,dtype=types)
-            if self.verbose:print("Value at address {} : {}".format(hex(self.target_adr+i),array))
+            if types is np.uint32:
+                if self.verbose:print("Value at address %s : 0x%8x"%(hex(self.target_adr+i),array[0]))
+            else:
+                if self.verbose:print("Value at address {} : {}".format(hex(self.target_adr+i),array))
             ret.extend(array)
         return np.asarray(ret)
 
