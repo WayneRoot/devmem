@@ -8,7 +8,7 @@ a = np.asarray([1,2,3,4],dtype=np.uint8)
 a.tostring()
 
 class devmem():
-    def __init__(self, target_adr, length, verbose=True):
+    def __init__(self, target_adr, length, verbose=False):
         self.verbose   = verbose
         self.target_adr= target_adr
         self.length    = length
