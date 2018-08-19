@@ -49,7 +49,7 @@ if __name__=='__main__':
     args.add_argument("target_adr",     type=s2i, default=0xe018c000,    help="0xe018c000 for Image")
     args.add_argument("-s", "--size",   type=int, default=4,             help="bytes default 4")
     args.add_argument("-t", "--type",   type=str, default=np.float32,    help="type default numpy.float32")
-    args.add_argument("-f", "--weights",type=str, default="yolo.weights" help="weights default yolo.weights")
+    args.add_argument("-f", "--weights",type=str, default="yolo.weights",help="weights default yolo.weights")
     args.add_argument("-w", "--write",  action='store_true',             help="write default read")
     args = args.parse_args()
 
