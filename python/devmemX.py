@@ -56,17 +56,20 @@ if __name__=='__main__':
     args.add_argument("-t", "--type",   type=str, default="np.float32",  help="type default numpy.float32")
     args.add_argument("-f", "--weights",type=str, default="yolo.weights",help="weights default yolo.weights")
     args.add_argument("-w", "--write",  action='store_true',             help="write default read")
+    args.add_argument("-S", "--silence",action='store_true',             help="silence")
     args = args.parse_args()
 
+    verbose=True
+    if args.silence: verbose=False
     if args.write:
         str = "d = np.arange(1,{}).astype({})".format(args.size,args.type)
         exec(str)
         d = d.tostring()
         print("write Bytes",len(d))
-        devmem(args.target_adr,len(d)).write(d).close()
+        devmem(args.target_adr,len(d),verbose=verbose).write(d).close()
     else:
         print("read Bytes",args.size)
-        str = "devmem(0x{:08x},{}).read({})".format(args.target_adr, args.size, args.type)
+        str = "devmem(0x{:08x},{},verbose=verbose).read({})".format(args.target_adr, args.size, args.type)
         print(str)
         exec(str)
 
