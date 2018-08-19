@@ -39,7 +39,6 @@ layers=[
     [256, 512, 3], 
     [512, 1024, 3], 
     [1024,1024, 1], 
-    [1024, 125, 1], 
 ]
 
 offset=0
@@ -60,18 +59,21 @@ for i, l in enumerate(layers):
 
     # load mean
     # txt = "yolov2.bn%d.avg_mean = dat[%d:%d]" % (i+1, offset, offset+out_ch)
-    gamma_oCiC = dat[offset: offset+out_ch].reshape((out_ch, in_ch))
-    gamma_iCoC = oCiCkSkS.transpose((1, 0))
+    mean_oCiC = dat[offset: offset+out_ch].reshape((out_ch, in_ch))
+    mean_iCoC = oCiCkSkS.transpose((1, 0))
     offset+=out_ch
 
     # load variance
-    txt = "yolov2.bn%d.avg_var = dat[%d:%d]" % (i+1, offset, offset+out_ch)
+    # txt = "yolov2.bn%d.avg_var = dat[%d:%d]" % (i+1, offset, offset+out_ch)
     variance_oCiC = dat[offset: offset+out_ch].reshape((out_ch, in_ch))
     variance_iCoC = oCiCkSkS.transpose((1, 0))
     offset+=out_ch
 
+    S = gamma_iCoC / np.sqrt( variance_iCoC )
+    B = gamma_iCoC * mean_iCoC / np.sqrt( variance_iCoC )
+
     # load Weight
-    txt = "yolov2.conv%d.W.data = dat[%d:%d].reshape(%d, %d, %d, %d)" % (i+1, offset, offset+(out_ch*in_ch*ksize*ksize), out_ch, in_ch, ksize, ksize)
+    # txt = "yolov2.conv%d.W.data = dat[%d:%d].reshape(%d, %d, %d, %d)" % (i+1, offset, offset+(out_ch*in_ch*ksize*ksize), out_ch, in_ch, ksize, ksize)
     weight_oCiCkSkS = dat[offset: offset+out_ch].reshape((out_ch, in_ch, ksize, ksize))
     weight_iCoCkSkS = oCiCkSkS.transpose((1, 0, 2, 3))
     offset+= (out_ch*in_ch*ksize*ksize)
