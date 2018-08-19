@@ -31,9 +31,14 @@ class devmem():
         self.mem.flush(0,0)
         return self
 
+    def type_bytes(self, type):
+        type_B = len(np.asarray(0,dtype=type).tostring())
+        return type_B
+
     def read(self, types):
-        type_bytes = len(np.asarray(0,dtype=type).tostring())
-        #assert self.length<=4, 'length > 4 causes system freeze'
+        #type_bytes = len(np.asarray(0,dtype=type).tostring())
+        type_bytes = self.type_bytes(type)
+        assert self.length%type_bytes==0, "length {} may cause system freeze".format(self.length)
         for i in range(0, self.length, type_bytes):
             datas = self.mem.read(type_bytes)
             array = np.fromstring(datas,dtype=types)
