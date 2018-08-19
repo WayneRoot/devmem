@@ -2,6 +2,7 @@ import sys,os,argparse
 from pdb import *
 import mmap
 import numpy as np
+import numpy
 
 a = np.asarray([1,2,3,4],dtype=np.uint8)
 a.tostring()
@@ -42,9 +43,8 @@ class devmem():
         for i in range(0, self.length, type_bytes):
             datas = self.mem.read(type_bytes)
             array = np.fromstring(datas,dtype=types)
-            #if self.verbose:print("Value at address %s : %s"%(hex(self.target_adr),hex(ii)))
-            #if self.verbose:print("Value at address %s : %s"%(hex(self.target_adr),float(ii)))
             if self.verbose:print("Value at address {} : {}".format(hex(self.target_adr+i),array))
+
     def close(self):
         self.mem.close()
 
@@ -59,7 +59,8 @@ if __name__=='__main__':
     args = args.parse_args()
 
     if args.write:
-        d = np.arange(0,1024*2).astype(np.float32).reshape(4,256,2)
+        str = "d = np.arange(1,{}).astype({})".format(args.size,args.type)
+        exec(str)
         d = d.tostring()
         print("write Bytes",len(d))
         devmem(args.target_adr,len(d)).write(d).close()
