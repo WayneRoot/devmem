@@ -32,22 +32,35 @@ class devmem():
         return self
 
     def read(self, types):
-        assert self.length<=4, 'length > 4 causes system freeze'
-        datas = self.mem.read(self.length)
-        array = np.fromstring(datas,dtype=types)
-        #if self.verbose:print("Value at address %s : %s"%(hex(self.target_adr),hex(ii)))
-        #if self.verbose:print("Value at address %s : %s"%(hex(self.target_adr),float(ii)))
-        if self.verbose:print("Value at address %s :"%(hex(self.target_adr)),array)
+        type_bytes = len(np.asarray(0,dtype=type).tostring())
+        #assert self.length<=4, 'length > 4 causes system freeze'
+        for i in range(0, self.length, type_bytes):
+            datas = self.mem.read(type_bytes)
+            array = np.fromstring(datas,dtype=types)
+            #if self.verbose:print("Value at address %s : %s"%(hex(self.target_adr),hex(ii)))
+            #if self.verbose:print("Value at address %s : %s"%(hex(self.target_adr),float(ii)))
+            if self.verbose:print("Value at address {} : {}".format(hex(self.target_adr+i),array))
     def close(self):
         self.mem.close()
 
 if __name__=='__main__':
     def s2i(s):return int(s,16)
     args = argparse.ArgumentParser('devmem')
-    args.add_argument("target_adr", type=s2i, default=0x0)
+    args.add_argument("target_adr", type=s2i,   default=0xe018c000, help="0xe018c000")
+    args.add_argument("-s", "--size", type=int, default=4,          help="bytes default 4")
+    args.add_argument("-t", "--type", type=str, default=np.float32, help="type default numpy.float32")
+    args.add_argument("-w", "--write", action='store_true',         help="write default read")
     args = args.parse_args()
-    d = np.arange(0,1024*2).astype(np.float32).reshape(4,256,2)
-    d = d.tostring()
-    print("write Bytes",len(d))
-    devmem(args.target_adr,len(d)).write(d).close()
-    #devmem(args.target_adr,2).read(np.uint8)
+
+    if args.write:
+        d = np.arange(0,1024*2).astype(np.float32).reshape(4,256,2)
+        d = d.tostring()
+        print("write Bytes",len(d))
+        devmem(args.target_adr,len(d)).write(d).close()
+    else:
+        print("read Bytes",args.size)
+        str = "devmem(0x{:08x},{}).read({})".format(args.target_adr, args.size, args.type)
+        print(str)
+        exec(str)
+        #devmem(args.target_adr,args.size).read(args.type)
+
