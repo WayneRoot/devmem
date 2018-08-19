@@ -18,8 +18,9 @@ def devmem(target_adr,length=1):
     mem = mmap.mmap(fd, map_size, mmap.MAP_SHARED, mmap.PROT_READ|mmap.PROT_WRITE, offset=reg_base)
     mem.seek(seek_size, os.SEEK_SET)
     xx=mem.read(length)
-    ii=int.from_bytes(xx, 'little')
-    print("Value at address %s : %s"%(hex(target_adr),hex(ii)))
+    #ii=int.from_bytes(xx, 'little')
+    #print("Value at address %s : %s"%(hex(target_adr),hex(ii)))
+    print("Value at address %s : "%(hex(target_adr)),np.fromstring(xx,dtype=np.uint8))
 
 
 def s2i(s):return int(s,16)
