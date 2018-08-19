@@ -38,7 +38,7 @@ class devmem():
         return type_B
 
     def read(self, types):
-        type_bytes = self.type_bytes(type)
+        type_bytes = self.type_bytes(types)
         assert self.length%type_bytes==0, "length {} may cause system freeze".format(self.length)
         ret = []
         for i in range(0, self.length, type_bytes):
@@ -46,6 +46,8 @@ class devmem():
             array = np.fromstring(datas,dtype=types)
             if types is np.uint32:
                 if self.verbose:print("Value at address %s : 0x%8x"%(hex(self.target_adr+i),array[0]))
+            elif types is np.uint8:
+                if self.verbose:print("Value at address %s : 0x%2x"%(hex(self.target_adr+i),array[0]))
             else:
                 if self.verbose:print("Value at address {} : {}".format(hex(self.target_adr+i),array))
             ret.extend(array)
