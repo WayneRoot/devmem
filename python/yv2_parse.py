@@ -48,7 +48,7 @@ layers=[
 offset = 0x0
 for i, l in enumerate(layers):
     in_ch, out_ch, ksize = l
-    print("[ Layer",i,":", in_ch, out_ch, ksize, ksize, "]")
+    print("[ Layer",i,": IOKK", in_ch, out_ch, ksize, ksize, "]")
 
     # load bias
     # txt = "yolov2.bias%d.b.data = dat[%d:%d]" % (i+1, offset, offset+out_ch)
@@ -74,6 +74,8 @@ for i, l in enumerate(layers):
     gamma_buff = gamma_buff.transpose((1, 0))
     d = gamma_buff.tostring()
     print("0x{:08x} : write Bytes {:14d} gamma {}".format(param_adr,len(d),gamma_buff.shape))
+    devmem(param_adr,len(d)).write(d).close()
+    param_adr+=len(d)
     offset+=out_ch
 
     # load mean
@@ -86,6 +88,8 @@ for i, l in enumerate(layers):
     mean_buff = mean_buff.transpose((1, 0))
     d = mean_buff.tostring()
     print("0x{:08x} : write Bytes {:14d} mean {}".format(param_adr,len(d),mean_buff.shape))
+    devmem(param_adr,len(d)).write(d).close()
+    param_adr+=len(d)
     offset+=out_ch
 
     # load variance
@@ -98,6 +102,8 @@ for i, l in enumerate(layers):
     variance_buff = variance_buff.transpose((1, 0))
     d = variance_buff.tostring()
     print("0x{:08x} : write Bytes {:14d} variance {}".format(param_adr,len(d),variance_buff.shape))
+    devmem(param_adr,len(d)).write(d).close()
+    param_adr+=len(d)
     offset+=out_ch
 
     #S = gamma_iCoC / np.sqrt( variance_iCoC )
@@ -109,6 +115,8 @@ for i, l in enumerate(layers):
     weight_iCoCkSkS = weight_oCiCkSkS.transpose((1, 0, 2, 3))
     d = weight_iCoCkSkS.tostring()
     print("0x{:08x} : write Bytes {:14d} weight {}".format(param_adr,len(d),weight_iCoCkSkS.shape))
+    devmem(param_adr,len(d)).write(d).close()
+    param_adr+=len(d)
     offset+= (out_ch*in_ch*ksize*ksize)
 
     #print(i+1, offset)
@@ -117,7 +125,7 @@ for i, l in enumerate(layers):
 in_ch = 1024
 out_ch = last_out
 ksize = 1
-print("[ Last Layer",":",in_ch, out_ch, ksize, ksize, "]")
+print("[ Last Layer",": IOKK",in_ch, out_ch, ksize, ksize, "]")
 
 # txt = "yolov2.bias%d.b.data = dat[%d:%d]" % (i+2, offset, offset+out_ch)
 bias_buff = np.zeros((out_ch, in_ch), dtype=np.float32)
@@ -128,6 +136,8 @@ for o in range(out_ch):
 bias_buff = bias_buff.transpose((1, 0))
 d = bias_buff.tostring()
 print("0x{:08x} : write Bytes {:14d} bias {}".format(param_adr,len(d),bias_buff.shape))
+devmem(param_adr,len(d)).write(d).close()
+param_adr+=len(d)
 offset+=out_ch
 
 # txt = "yolov2.conv%d.W.data = dat[%d:%d].reshape(%d, %d, %d, %d)" % (i+2, offset, offset+(out_ch*in_ch*ksize*ksize), out_ch, in_ch, ksize, ksize)
@@ -135,10 +145,11 @@ weight_oCiCkSkS = dat[offset: offset+out_ch*in_ch*ksize*ksize].reshape((out_ch, 
 weight_iCoCkSkS = weight_oCiCkSkS.transpose((1, 0, 2, 3))   # IOKK
 d = weight_iCoCkSkS.tostring()
 print("0x{:08x} : write Bytes {:14d} weight {}".format(param_adr,len(d),weight_iCoCkSkS.shape))
-devmem(0xe018c000,len(d)).write(d).close()
+devmem(param_adr,len(d)).write(d).close()
+param_adr+=len(d)
 offset+=out_ch*in_ch*ksize*ksize
 
-#print(i+2, offset)
+print("* Last Address 0x%x"%param_adr)
 
 #print("save weights file to yolov2_darknet_hdf5.model")
 #serializers.save_hdf5("yolov2_darknet_hdf5.model", yolov2)
