@@ -19,13 +19,12 @@ class devmem():
         self.fd  = os.open("/dev/mem", os.O_RDWR|os.O_SYNC)
         self.mem = mmap.mmap(
             self.fd,
-            self.length,
+            self.length+self.seek_size,
             mmap.MAP_SHARED,
             mmap.PROT_READ|mmap.PROT_WRITE,
             offset=self.reg_base
         )
-        #self.mem.seek(self.seek_size, os.SEEK_SET)
-        self.mem.seek(self.seek_size)
+        self.mem.seek(self.seek_size, os.SEEK_SET)
 
     def write(self, datas):
         self.mem.write(datas)
@@ -35,7 +34,7 @@ class devmem():
     def read(self, type):
         assert self.length<=4, 'length > 4 causes system freeze'
         datas = self.mem.read(self.length)
-        array = np.fromstring(datas,dtype=type)
+        array = np.fromstring(datas,dtype=np.uint8)
         #if self.verbose:print("Value at address %s : %s"%(hex(self.target_adr),hex(ii)))
         #if self.verbose:print("Value at address %s : %s"%(hex(self.target_adr),float(ii)))
         if self.verbose:print("Value at address %s :"%(hex(self.target_adr)),array)
