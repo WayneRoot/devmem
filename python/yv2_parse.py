@@ -18,10 +18,21 @@ parser = argparse.ArgumentParser(description="parse")
 parser.add_argument('file', default="yolov2-tiny-voc_352_288_final.weights", help="path")
 args = parser.parse_args()
 
-print("loading", args.file)
+print("loading #1", args.file)
 file = open(args.file, "rb")
-#dat=np.fromfile(file, dtype=np.float32)[5:] # skip header(4xint)
-dat=np.fromfile(file, dtype=np.float32)[4:] # skip header(4xint)
+dat_org=np.fromfile(file, dtype=np.int32)
+file.close()
+(major, minor, revision)= dat_org[:3]
+if major*10+minor >= 2 and major < 1000 and minor < 1000:
+    skipB = int((4+4+4+8)/4)
+    print("Training 64bit",skipB)
+else:
+    skipB = int((4+4+4+4)/4)
+    print("Training 32bit",skipB)
+
+print("loading #2", args.file)
+file = open(args.file, "rb")
+dat=np.fromfile(file, dtype=np.float32)[skipB:] # skip header(4xint)
 
 # load model
 print("loading initial model...")
@@ -106,8 +117,9 @@ for i, l in enumerate(layers):
     param_adr+=len(d)
     offset+=out_ch
 
-    #S = gamma_iCoC / np.sqrt( variance_iCoC )
-    #B = gamma_iCoC * mean_iCoC / np.sqrt( variance_iCoC )
+    S = gamma_buff / np.sqrt( variance_buff )
+    B = gamma_buff * mean_buff / np.sqrt( variance_buff )
+    print("SB",S.shape,B.shape)
 
     # load Weight
     # txt = "yolov2.conv%d.W.data = dat[%d:%d].reshape(%d, %d, %d, %d)" % (i+1, offset, offset+(out_ch*in_ch*ksize*ksize), out_ch, in_ch, ksize, ksize)
