@@ -14,8 +14,16 @@ import argparse
 from devmemX import *
 
 parser = argparse.ArgumentParser(description="parse")
-parser.add_argument('file', default="yolov2-tiny-voc_352_288_final.weights", help="path")
+parser.add_argument("-f", "--file", default="yolov2-tiny-voc_352_288_final.weights", help="path")
+parser.add_argument("-S", "--scale",  type=np.float32, default=None, help="force scale value")
+parser.add_argument("-B", "--bias",   type=np.float32, default=None, help="force bias  value")
+parser.add_argument("-W", "--weight", type=np.float32, default=None, help="force weight value")
+parser.add_argument("-wo","--wonly",action="store_true", help="write weight only")
 args = parser.parse_args()
+
+if args.bias   is not None:print("force bias to",   args.bias)
+if args.scale  is not None:print("force scane to",  args.scale)
+if args.weight is not None:print("force weight to", args.weight)
 
 print("loading #1", args.file)
 infile = open(args.file, "rb")
@@ -107,6 +115,10 @@ for loadNo in range(2):
         Biassed = gamma_buff * mean_buff / np.sqrt( variance_buff )
         SB_buff = np.zeros((in_ch, out_ch, 2), dtype=np.float32)
         if loadNo == 1:
+            if args.bias is not None:
+                Scaling = np.full(Scaling.shape, args.scale, dtype=np.float32)
+            if args.bias is not None:
+                Biassed = np.full(Biassed.shape, args.bias,  dtype=np.float32)
             for i in range(in_ch):
                 for o in range(out_ch):
                     SB_buff[i][o][0] = Scaling[i][o]
@@ -120,6 +132,8 @@ for loadNo in range(2):
         if loadNo == 0:
             weight_oCiCkSkS = dat[offset: offset+out_ch*in_ch*ksize*ksize].reshape((out_ch, in_ch, ksize, ksize))
             weight_iCoCkSkS = weight_oCiCkSkS.transpose((1, 0, 2, 3))   # IOKK
+            if args.weight is not None:
+                weight_iCoCkSkS = np.full(weight_iCoCkSkS.shape, args.weight, dtype=np.float32)
             d = weight_iCoCkSkS.tostring()
             print("  0x{:08x} : write Bytes {:14d} weight {}".format(param_adr,len(d),weight_iCoCkSkS.shape))
             devmem(param_adr,len(d)).write(d).close()
@@ -135,6 +149,8 @@ for loadNo in range(2):
     print("[ Last Layer",": IOKK %5d%5d%5d%5d ]"%(in_ch, out_ch, ksize, ksize))
 
     bias_oCiC = dat[offset: offset+out_ch].reshape((out_ch))
+    if args.bias is not None:
+        bias_oCiC = np.full(bias_oCiC.shape, args.bias, dtype=np.float32)
     d = bias_oCiC.tostring()
     if loadNo==1:
         print("  0x{:08x} : write Bytes {:14d} bias {}".format(param_adr,len(d),bias_oCiC.shape))
@@ -145,6 +161,8 @@ for loadNo in range(2):
     # load last convolution weight
     weight_oCiCkSkS = dat[offset: offset+out_ch*in_ch*ksize*ksize].reshape((out_ch, in_ch, ksize, ksize))
     weight_iCoCkSkS = weight_oCiCkSkS.transpose((1, 0, 2, 3))   # IOKK
+    if args.weight is not None:
+        weight_iCoCkSkS = np.full(weight_iCoCkSkS.shape, args.weight, dtype=np.float32)
     d = weight_iCoCkSkS.tostring()
     if loadNo==0:
         print("  0x{:08x} : write Bytes {:14d} weight {}".format(param_adr,len(d),weight_iCoCkSkS.shape))
@@ -153,6 +171,8 @@ for loadNo in range(2):
     offset+=out_ch*in_ch*ksize*ksize
 
     print("* Last Address 0x%x"%param_adr)
+
+    if args.wonly:break
 
 print("*\n* Summary")
 print("* parametor : %dB / infile size : %dB"%(param_adr-param_adr_start, (len(dat)+skipB)*4))
