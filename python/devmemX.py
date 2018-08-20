@@ -1,3 +1,4 @@
+#! /usr/bin/env python3
 import sys,os,argparse
 from pdb import *
 import mmap
@@ -37,13 +38,15 @@ class devmem():
         return type_B
 
     def read(self, types):
-        #type_bytes = len(np.asarray(0,dtype=type).tostring())
         type_bytes = self.type_bytes(type)
         assert self.length%type_bytes==0, "length {} may cause system freeze".format(self.length)
+        ret = []
         for i in range(0, self.length, type_bytes):
             datas = self.mem.read(type_bytes)
             array = np.fromstring(datas,dtype=types)
             if self.verbose:print("Value at address {} : {}".format(hex(self.target_adr+i),array))
+            ret.extend(array)
+        return np.asarray(ret)
 
     def close(self):
         self.mem.close()
