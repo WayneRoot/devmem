@@ -15,12 +15,14 @@ from devmemX import *
 
 parser = argparse.ArgumentParser(description="parse")
 parser.add_argument("-f", "--file", default="yolov2-tiny-voc_352_288_final.weights", help="path")
+parser.add_argument("-A", "--address",type=int, default=0xc0000000,  help="start address default 0xc0000000")
 parser.add_argument("-S", "--scale",  type=np.float32, default=None, help="force scale value")
 parser.add_argument("-B", "--bias",   type=np.float32, default=None, help="force bias  value")
 parser.add_argument("-W", "--weight", type=np.float32, default=None, help="force weight value")
 parser.add_argument("-wo","--wonly",action="store_true", help="write weight only")
 args = parser.parse_args()
 
+print("start address to memory:",args.address)
 if args.bias   is not None:print("force bias to",   args.bias)
 if args.scale  is not None:print("force scane to",  args.scale)
 if args.weight is not None:print("force weight to", args.weight)
@@ -43,7 +45,7 @@ n_classes = 20
 n_boxes = 5
 last_out = (n_classes + 5) * n_boxes
 
-param_adr_start = param_adr = 0xc0000000  # param address DDR
+param_adr_start = param_adr = args.address  # param address DDR
 layers=[
     [3, 16, 3], 
     [16, 32, 3], 
@@ -55,6 +57,7 @@ layers=[
     [1024,1024, 1], 
 ]
 
+# for a convolutional layer
 for loadNo in range(2):
     offset = 0x0
     print("loading #2", args.file)
@@ -115,7 +118,7 @@ for loadNo in range(2):
         Biassed = gamma_buff * mean_buff / np.sqrt( variance_buff )
         SB_buff = np.zeros((in_ch, out_ch, 2), dtype=np.float32)
         if loadNo == 1:
-            if args.bias is not None:
+            if args.scale is not None:
                 Scaling = np.full(Scaling.shape, args.scale, dtype=np.float32)
             if args.bias is not None:
                 Biassed = np.full(Biassed.shape, args.bias,  dtype=np.float32)
