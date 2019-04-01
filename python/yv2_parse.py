@@ -54,7 +54,7 @@ layers=[
     [128, 256, 3], 
     [256, 512, 3], 
     [512, 1024, 3], 
-    [1024,1024, 1], 
+    [1024,1024, 3], 
 ]
 
 # for a convolutional layer
@@ -70,45 +70,53 @@ for loadNo in range(2):
         print("[ Layer",i,": IOKK %5d%5d%5d%5d ]"%(in_ch, out_ch, ksize, ksize))
 
         # load bias
-        bias_buff = np.zeros((out_ch, in_ch), dtype=np.float32)
+    #    bias_buff = np.zeros((out_ch, in_ch), dtype=np.float32)
+        bias_buff = np.zeros((out_ch), dtype=np.float32)
         bias_oCiC = dat[offset: offset+out_ch].reshape((out_ch))
-        for o in range(out_ch):
-            for i in range(in_ch):
-                bias_buff[o][i] = bias_oCiC[o]
-        bias_buff = bias_buff.transpose((1, 0)) # IO
+    #    for o in range(out_ch):
+    #        for i in range(in_ch):
+    #            bias_buff[o][i] = bias_oCiC[o]
+    #    bias_buff = bias_buff.transpose((1, 0)) # IO
+        bias_buff = bias_oCiC
         d = bias_buff.tostring()
         if loadNo==1:print("  {} : read  Bytes {:14d} bias        {}".format(' '*10,len(d),bias_buff.shape))
         offset+=out_ch
 
         # load gamma
-        gamma_buff = np.zeros((out_ch, in_ch), dtype=np.float32)
+    #    gamma_buff = np.zeros((out_ch, in_ch), dtype=np.float32)
+        gamma_buff = np.zeros((out_ch), dtype=np.float32)
         gamma_oCiC = dat[offset: offset+out_ch].reshape((out_ch))
-        for o in range(out_ch):
-            for i in range(in_ch):
-                gamma_buff[o][i] = gamma_oCiC[o]
-        gamma_buff = gamma_buff.transpose((1, 0))   # IO
+    #    for o in range(out_ch):
+    #        for i in range(in_ch):
+    #            gamma_buff[o][i] = gamma_oCiC[o]
+    #    gamma_buff = gamma_buff.transpose((1, 0))   # IO
+        gamma_buff = gamma_oCiC
         d = gamma_buff.tostring()
         if loadNo==1:print("  {} : read  Bytes {:14d} gamma       {}".format(' '*10,len(d),gamma_buff.shape))
         offset+=out_ch
 
         # load mean
-        mean_buff = np.zeros((out_ch, in_ch), dtype=np.float32)
+    #    mean_buff = np.zeros((out_ch, in_ch), dtype=np.float32)
+        mean_buff = np.zeros((out_ch), dtype=np.float32)
         mean_oCiC = dat[offset: offset+out_ch].reshape((out_ch))
-        for o in range(out_ch):
-            for i in range(in_ch):
-                mean_buff[o][i] = mean_oCiC[o]
-        mean_buff = mean_buff.transpose((1, 0)) # IO
+    #    for o in range(out_ch):
+    #        for i in range(in_ch):
+    #            mean_buff[o][i] = mean_oCiC[o]
+    #    mean_buff = mean_buff.transpose((1, 0)) # IO
+        mean_buff = mean_oCiC
         d = mean_buff.tostring()
         if loadNo==1:print("  {} : read  Bytes {:14d} mean        {}".format(' '*10,len(d),mean_buff.shape))
         offset+=out_ch
 
         # load variance
-        variance_buff = np.zeros((out_ch, in_ch), dtype=np.float32)
+    #    variance_buff = np.zeros((out_ch, in_ch), dtype=np.float32)
+        variance_buff = np.zeros((out_ch), dtype=np.float32)
         variance_oCiC = dat[offset: offset+out_ch].reshape((out_ch))
-        for o in range(out_ch):
-            for i in range(in_ch):
-                variance_buff[o][i] = variance_oCiC[o]
-        variance_buff = variance_buff.transpose((1, 0)) # IO
+    #    for o in range(out_ch):
+    #        for i in range(in_ch):
+    #            variance_buff[o][i] = variance_oCiC[o]
+    #    variance_buff = variance_buff.transpose((1, 0)) # IO
+        variance_buff = variance_oCiC
         d = variance_buff.tostring()
         if loadNo==1:print("  {} : read  Bytes {:14d} variance    {}".format(' '*10,len(d),variance_buff.shape))
         offset+=out_ch
@@ -116,16 +124,17 @@ for loadNo in range(2):
         # foldint Scale and Bias
         Scaling = gamma_buff / np.sqrt( variance_buff )
         Biassed = gamma_buff * mean_buff / np.sqrt( variance_buff )
-        SB_buff = np.zeros((in_ch, out_ch, 2), dtype=np.float32)
+    #    SB_buff = np.zeros((in_ch, out_ch, 2), dtype=np.float32)
+        SB_buff = np.zeros((out_ch, 2), dtype=np.float32)
         if loadNo == 1:
             if args.scale is not None:
                 Scaling = np.full(Scaling.shape, args.scale, dtype=np.float32)
             if args.bias is not None:
                 Biassed = np.full(Biassed.shape, args.bias,  dtype=np.float32)
-            for i in range(in_ch):
-                for o in range(out_ch):
-                    SB_buff[i][o][0] = Scaling[i][o]
-                    SB_buff[i][o][1] = Biassed[i][o]
+    #        for i in range(in_ch):
+            for o in range(out_ch):
+                SB_buff[o][0] = Scaling[o]
+                SB_buff[o][1] = Biassed[o]
             d = SB_buff.tostring()
             print("  0x{:08x} : write Bytes {:14d} scale and bias {}".format(param_adr,len(d),SB_buff.shape))
             devmem(param_adr,len(d)).write(d).close()
