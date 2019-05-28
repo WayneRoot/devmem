@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 # -*0 coding: utf-8 -*-
 
 import pygame
