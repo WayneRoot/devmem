@@ -15,9 +15,6 @@ while(cap.isOpened()):
     if ret==True:
         frame = cv2.flip(frame,0)
 
-        # write the flipped frame
-        #out.write(frame)
-
         fb0.imshow('frame',frame)
         #cv2.imshow('frame',frame)
         cnt+=1
@@ -25,8 +22,6 @@ while(cap.isOpened()):
         sys.stdout.write('\b'*30)
         sys.stdout.write("%.3fFPS"%(cnt/elapsed))
         sys.stdout.flush()
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
     else:
         break
 
