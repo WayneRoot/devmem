@@ -6,9 +6,10 @@ from fbdraw import fb
 
 fb0 = fb(shrink=3)
 cap = cv2.VideoCapture(0)
+print("cam.property-default:",cap.get(3),cap.get(4))
 cap.set(3,640)  # 3:width
 cap.set(4,480)  # 4:height
-print("cam.property:",cap.get(3),cap.get(4))
+print("cam.property-set:",cap.get(3),cap.get(4))
 
 cnt = 0
 start = time()
