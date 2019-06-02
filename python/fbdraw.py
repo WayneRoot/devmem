@@ -45,7 +45,7 @@ class fb():
 
 if __name__ == '__main__':
     img = cv2.imread('dog.jpg')
-    fb = fb()
+    fb = fb(shrink=1)
     while True:
         fb.imshow('images',img)
     fb.close()
