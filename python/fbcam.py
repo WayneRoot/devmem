@@ -6,7 +6,8 @@ from time import time
 from fbdraw import fb
 
 args=argparse.ArgumentParser()
-args.add_argument('-c','--cv',action='store_true')
+args.add_argument('-c', '--cv',action='store_true')
+args.add_argument('-bg','--background',type=str,default='debian2.jpg')
 args=args.parse_args()
 video_fb = True if args.cv is not True else False
 print(video_fb)
@@ -14,8 +15,10 @@ print(video_fb)
 if video_fb: fb0 = fb(shrink=3)
 if video_fb: fbB = fb(shrink=1)
 if video_fb:
+    os.system('clear')
     fbB = fb(shrink=1)
-    background = cv2.imread('debian2.jpg')
+    assert os.path.exists(args.background)
+    background = cv2.imread(args.background)
     fbB.imshow('back',background)
     fbB.close()
 cap = cv2.VideoCapture(0)
