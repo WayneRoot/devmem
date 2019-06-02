@@ -16,6 +16,7 @@ print(video_fb)
 if video_fb: fb0 = fb(shrink=args.shrink)
 if video_fb: fbB = fb(shrink=1)
 if video_fb:
+    os.system('setterm -blank 0')
     os.system('clear')
     fbB = fb(shrink=1)
     assert os.path.exists(args.background)
