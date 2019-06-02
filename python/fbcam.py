@@ -38,7 +38,8 @@ elif args.cammode=='svga':
 elif args.cammode=='qvga':
     cap.set(3,320)  # 3:width
     cap.set(4,240)  # 4:height
-print("cam.property-set:",cap.get(3),cap.get(4))
+print("cam.property-set:",cap.get(3),cap.get(4),args.cammode)
+print("shrink:1/%d"%args.shrink)
 
 cnt = 0
 start = time()
