@@ -1,10 +1,17 @@
 import numpy as np
 import cv2
 import os,sys
+import argparse
 from time import time
 from fbdraw import fb
 
-fb0 = fb(shrink=3)
+args=argparse.ArgumentParser()
+args.add_argument('-c','--cv',action='store_true')
+args=args.parse_args()
+video_fb = True if args.cv is not True else False
+print(video_fb)
+
+if video_fb: fb0 = fb(shrink=3)
 cap = cv2.VideoCapture(0)
 print("cam.property-default:",cap.get(3),cap.get(4))
 cap.set(3,640)  # 3:width
@@ -19,17 +26,18 @@ while(cap.isOpened()):
     if ret==True:
         frame = cv2.flip(frame,0)
 
-        fb0.imshow('frame',frame)
-        #cv2.imshow('frame',frame)
+        if video_fb is True :fb0.imshow('frame',frame)
+        if video_fb is False:cv2.imshow('frame',frame)
         cnt+=1
         elapsed = time() - start
         sys.stdout.write('\b'*30)
         sys.stdout.write("%.3fFPS"%(cnt/elapsed))
         sys.stdout.flush()
+        if video_fb is False and cv2.waitKey(1) != -1:break
     else:
         break
 
 # Release everything if job is finished
-fb0.close()
+if video_fb: fb0.close()
 cap.release()
 cv2.destroyAllWindows()
