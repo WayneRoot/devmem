@@ -12,6 +12,12 @@ video_fb = True if args.cv is not True else False
 print(video_fb)
 
 if video_fb: fb0 = fb(shrink=3)
+if video_fb: fbB = fb(shrink=1)
+if video_fb:
+    fbB = fb(shrink=1)
+    background = cv2.imread('debian2.jpg')
+    fbB.imshow('back',background)
+    fbB.close()
 cap = cv2.VideoCapture(0)
 print("cam.property-default:",cap.get(3),cap.get(4))
 cap.set(3,640)  # 3:width
