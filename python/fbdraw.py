@@ -1,6 +1,7 @@
-import os,sys
+import os,sys,argparse
 import cv2
 import numpy as np
+from time import time
 
 class fb():
     def __init__(self,dev_fb='/dev/fb0',shrink=2):
@@ -47,8 +48,20 @@ class fb():
         self.fb.close()
 
 if __name__ == '__main__':
-    img = cv2.imread('dog.jpg')
-    fb = fb(shrink=1)
+    args=argparse.ArgumentParser()
+    args.add_argument('-s','--shrink',default=1,type=int)
+    args.add_argument('-i','--image', default='debian2.jpg',type=str)
+    args=args.parse_args()
+    assert os.path.exists(args.image)
+
+    fb = fb(shrink=args.shrink)
+    start = time()
+    cnt = 0
     while True:
+        img = cv2.imread(args.image)
         fb.imshow('images',img)
+        cnt+=1
+        sys.stdout.write('\b'*20)
+        sys.stdout.write('%.3fFPS'%(cnt/(time()-start)))
+        sys.stdout.flush()
     fb.close()
