@@ -7,12 +7,13 @@ from fbdraw import fb
 
 args=argparse.ArgumentParser()
 args.add_argument('-c', '--cv',action='store_true')
+args.add_argument('-s', '--shrink',type=int,default=3,choices=[1,2,3])
 args.add_argument('-bg','--background',type=str,default='debian2.jpg')
 args=args.parse_args()
 video_fb = True if args.cv is not True else False
 print(video_fb)
 
-if video_fb: fb0 = fb(shrink=3)
+if video_fb: fb0 = fb(shrink=args.shrink)
 if video_fb: fbB = fb(shrink=1)
 if video_fb:
     os.system('clear')
