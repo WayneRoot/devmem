@@ -9,6 +9,7 @@ args=argparse.ArgumentParser()
 args.add_argument('-c', '--cv',action='store_true')
 args.add_argument('-s', '--shrink',type=int,default=3,choices=[1,2,3])
 args.add_argument('-bg','--background',type=str,default='debian2.jpg')
+args.add_argument('-cm','--cammode',type=str,default='halfvga',choices=['vga','svga'])
 args=args.parse_args()
 video_fb = True if args.cv is not True else False
 print(video_fb)
@@ -26,8 +27,15 @@ if video_fb:
 cap = cv2.VideoCapture(0)
 print "Hitachi Solutions Technology"
 print("cam.property-default:",cap.get(3),cap.get(4))
-cap.set(3,640)  # 3:width
-cap.set(4,480)  # 4:height
+if args.cammode=='vga':
+    cap.set(3,640)  # 3:width
+    cap.set(4,480)  # 4:height
+elif args.cammode=='svga':
+    cap.set(3,800)  # 3:width
+    cap.set(4,600)  # 4:height
+else:
+    cap.set(3,320)  # 3:width
+    cap.set(4,240)  # 4:height
 print("cam.property-set:",cap.get(3),cap.get(4))
 
 cnt = 0
