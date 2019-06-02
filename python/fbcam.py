@@ -14,18 +14,20 @@ args=args.parse_args()
 video_fb = True if args.cv is not True else False
 print(video_fb)
 
-if video_fb: fb0 = fb(shrink=args.shrink)
-if video_fb: fbB = fb(shrink=1)
 if video_fb:
-    os.system('setterm -blank 0')
-    os.system('clear')
+    fb0 = fb(shrink=args.shrink)
     fbB = fb(shrink=1)
     assert os.path.exists(args.background)
     background = cv2.imread(args.background)
+    os.system('clear')
+    if os.system('which clear') == 0: os.system('clear')
     fbB.imshow('back',background)
+    print "Hitachi Solutions Technology"
+    if os.system('which setterm') == 0: os.system('setterm -blank 0;echo setterm -blank 0')
+    fbB = fb(shrink=1)
     fbB.close()
+    print("virtual_size:",fb0.vw,fb0.vh)
 cap = cv2.VideoCapture(0)
-print "Hitachi Solutions Technology"
 print("cam.property-default:",cap.get(3),cap.get(4))
 if args.cammode=='vga':
     cap.set(3,640)  # 3:width
@@ -33,7 +35,7 @@ if args.cammode=='vga':
 elif args.cammode=='svga':
     cap.set(3,800)  # 3:width
     cap.set(4,600)  # 4:height
-else:
+elif args.cammode=='qvga':
     cap.set(3,320)  # 3:width
     cap.set(4,240)  # 4:height
 print("cam.property-set:",cap.get(3),cap.get(4))
