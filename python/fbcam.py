@@ -9,7 +9,7 @@ args=argparse.ArgumentParser()
 args.add_argument('-c', '--cv',action='store_true')
 args.add_argument('-s', '--shrink',type=int,default=3,choices=[1,2,3])
 args.add_argument('-bg','--background',type=str,default='debian2.jpg')
-args.add_argument('-cm','--cammode',type=str,default='half_vga',choices=['half_vga','vga','svga'])
+args.add_argument('-cm','--cammode',type=str,default='qvga',choices=['qvga','vga','svga'])
 args=args.parse_args()
 video_fb = True if args.cv is not True else False
 print(video_fb)
