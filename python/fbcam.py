@@ -23,6 +23,7 @@ if video_fb:
     fbB.imshow('back',background)
     fbB.close()
 cap = cv2.VideoCapture(0)
+print "Hitachi Solutions Technology"
 print("cam.property-default:",cap.get(3),cap.get(4))
 cap.set(3,640)  # 3:width
 cap.set(4,480)  # 4:height
