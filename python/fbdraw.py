@@ -29,8 +29,11 @@ class fb():
         img      = cv2.resize(img, (int(self.vw/self.shrink), int(self.vh/self.shrink)))
         if self.alpha is None: self.alpha = np.zeros((img.shape[0],img.shape[1],1),dtype=np.uint8)
         bgra_win = np.concatenate([img,self.alpha],axis=2)
-        self.canvas[:,self.shift:int(self.shift+img.shape[1]),:] = bgra_win
-        bgra_str = (self.canvas.reshape(-1)).tostring()
+        if self.shrink == 1:
+            bgra_str = (bgra_win.reshape(-1)).tostring()
+        else:
+            self.canvas[:,self.shift:int(self.shift+img.shape[1]),:] = bgra_win
+            bgra_str = (self.canvas.reshape(-1)).tostring()
         self.fb.seek(self.seeks)
         self.fb.write(bgra_str)
 
