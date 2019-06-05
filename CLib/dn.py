@@ -1,5 +1,6 @@
 from ctypes import *
-import math
+import math, sys, os, re
+import numpy as np
 
 def c_array(ctype, values):
     arr = (ctype*len(values))()
@@ -127,12 +128,22 @@ def detect(net, meta, image, thresh=.5, hier_thresh=.5, nms=.45):
     return res
     
 def main():
+
+    filename = 'featuremap_8.txt'
+    with open(filename) as f:
+        txt_v       = f.read().strip().split()
+        predictions = np.asarray([np.float(re.sub(',','',i)) for i in txt_v])
+    print("inference dummy",predictions.shape, filename)
+    biases = np.asarray([1.08,1.19,  3.42,4.41,  6.63,11.38,  9.42,5.11,  16.62,10.52],dtype=np.float32)
+    sys.exit(-1)
     cpf = c_float*10
     data= [ float(i) for i in range(10)]
     output = cpf(*data)
     biases = cpf(*data)
+    # outputs = 12375
+    # biases[10]=1.08,1.19,  3.42,4.41,  6.63,11.38,  9.42,5.11,  16.62,10.52 == anchors
     lay = M_LAYER(
-        10,
+        12375,
         output,
         biases,
         11,
@@ -144,7 +155,7 @@ def main():
     num = c_int(0)
     pnum = pointer(num)
     #dets = get_network_boxes(net, im.w, im.h, thresh, hier_thresh, None, 0, pnum)
-    dets = get_network_boxes(pointer(lay), 353, 288, 0.5, 0.5, None, 0, pnum)
+    dets = get_network_boxes(pointer(lay), 768, 576, 0.5, 0.5, None, 1, pnum)
     for i in range(10):
         print("dets {} {}".format(type(dets),dets[i].classes))
     print(num)
