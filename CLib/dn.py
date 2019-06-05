@@ -23,11 +23,13 @@ class DETECTION(Structure):
 class M_LAYER(Structure):
     _fields_ = [("outputs", c_int),
                 ("output",  POINTER(c_float)),
+                ("biases",  POINTER(c_float)),
                 ("w",       c_int),
                 ("h",       c_int),
                 ("n",       c_int),
                 ("coords",  c_int),
-                ("classes", c_int)]
+                ("classes", c_int),
+                ("background", c_int)]
 
 class IMAGE(Structure):
     _fields_ = [("w", c_int),
@@ -127,19 +129,25 @@ def detect(net, meta, image, thresh=.5, hier_thresh=.5, nms=.45):
 def main():
     cpf = c_float*10
     data= [ float(i) for i in range(10)]
-    arr = cpf(*data)
+    output = cpf(*data)
+    biases = cpf(*data)
     lay = M_LAYER(
         10,
-        arr,
+        output,
+        biases,
         11,
         9,
         125,
         4,
-        20)
+        20,
+        0)
     num = c_int(0)
     pnum = pointer(num)
     #dets = get_network_boxes(net, im.w, im.h, thresh, hier_thresh, None, 0, pnum)
     dets = get_network_boxes(pointer(lay), 353, 288, 0.5, 0.5, None, 0, pnum)
+    for i in range(10):
+        print("dets {} {}".format(type(dets),dets[i].classes))
+    print(num)
 
 if __name__ == "__main__":
     main()

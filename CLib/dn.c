@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <malloc.h>
+#include <math.h>
 
 typedef struct{
     float x, y, w, h;
@@ -17,11 +18,12 @@ typedef struct detection{
 typedef struct m_layer{
     int outputs;
     float *output;
+    float *biases;
     int w,h,n;
     int coords,classes;
+    int background;
 } m_layer;
-/*
-int entry_index(layer l, int batch, int location, int entry)
+int entry_index(m_layer l, int batch, int location, int entry)
 {
     int n =   location / (l.w*l.h);
     int loc = location % (l.w*l.h);
@@ -66,7 +68,7 @@ box get_region_box(float *x, float *biases, int n, int index, int i, int j, int 
     return b;
 }
 
-void get_region_detections(layer l, int w, int h, int netw, int neth, float thresh, int *map, float tree_thresh, int relative, detection *dets)
+void get_region_detections(m_layer l, int w, int h, int netw, int neth, float thresh, int *map, float tree_thresh, int relative, detection *dets)
 {
     int i,j,n,z;
     float *predictions = l.output;
@@ -103,26 +105,13 @@ void get_region_detections(layer l, int w, int h, int netw, int neth, float thre
     correct_region_boxes(dets, l.w*l.h*l.n, w, h, netw, neth, relative);
 }
 
-void fill_network_boxes(network *net, int w, int h, float thresh, float hier, int *map, int relative, detection *dets)
+void fill_network_boxes(m_layer *l_p, int w, int h, float thresh, float hier, int *map, int relative, detection *dets)
 {
     int j;
-    for(j = 0; j < net->n; ++j){
-        layer l = net->layers[j];
-        if(l.type == YOLO){
-            int count = get_yolo_detections(l, w, h, net->w, net->h, thresh, map, relative, dets);
-            dets += count;
-        }
-        if(l.type == REGION){
-            get_region_detections(l, w, h, net->w, net->h, thresh, map, hier, relative, dets);
-            dets += l.w*l.h*l.n;
-        }
-        if(l.type == DETECTION){
-            get_detection_detections(l, w, h, thresh, dets);
-            dets += l.w*l.h*l.n;
-        }
-    }
+    m_layer l = *l_p;
+    //get_region_detections(l, w, h, net->w, net->h, thresh, map, hier, relative, dets);
+    get_region_detections(l, w, h, l_p->w, l_p->h, thresh, map, hier, relative, dets);
 }
-*/
 /*
 int num_detections(network *net, float thresh)
 {
@@ -165,6 +154,6 @@ detection *get_network_boxes(m_layer *l_p, int w, int h, float thresh, float hie
         printf("%f\n",l_p->output[i]);
     printf("%d\n",l_p->coords);
     detection *dets = make_network_boxes(l_p, thresh, num);
-//    fill_network_boxes(net, w, h, thresh, hier, map, relative, dets);
+    fill_network_boxes(l_p, w, h, thresh, hier, map, relative, dets);
     return dets;
 }
