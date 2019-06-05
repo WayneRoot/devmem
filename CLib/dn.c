@@ -16,7 +16,7 @@ typedef struct detection{
 
 typedef struct m_layer{
     int outputs;
-//    float *output;
+    float *output;
     int w,h,n;
     int coords,classes;
 } m_layer;
@@ -160,6 +160,9 @@ detection *make_network_boxes(m_layer *l_p, float thresh, int *num)
 }
 detection *get_network_boxes(m_layer *l_p, int w, int h, float thresh, float hier, int *map, int relative, int *num)
 {
+    int i;
+    for(i=0;i<10;i++)
+        printf("%f\n",l_p->output[i]);
     printf("%d\n",l_p->coords);
     detection *dets = make_network_boxes(l_p, thresh, num);
 //    fill_network_boxes(net, w, h, thresh, hier, map, relative, dets);

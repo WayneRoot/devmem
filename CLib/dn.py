@@ -1,16 +1,5 @@
 from ctypes import *
 import math
-import random
-
-def sample(probs):
-    s = sum(probs)
-    probs = [a/s for a in probs]
-    r = random.uniform(0, 1)
-    for i in range(len(probs)):
-        r = r - probs[i]
-        if r <= 0:
-            return i
-    return len(probs)-1
 
 def c_array(ctype, values):
     arr = (ctype*len(values))()
@@ -31,9 +20,9 @@ class DETECTION(Structure):
                 ("objectness", c_float),
                 ("sort_class", c_int)]
 
-                #("outputs", POINTER(c_float)),
 class M_LAYER(Structure):
     _fields_ = [("outputs", c_int),
+                ("output",  POINTER(c_float)),
                 ("w",       c_int),
                 ("h",       c_int),
                 ("n",       c_int),
@@ -136,8 +125,12 @@ def detect(net, meta, image, thresh=.5, hier_thresh=.5, nms=.45):
     return res
     
 def main():
+    cpf = c_float*10
+    data= [ float(i) for i in range(10)]
+    arr = cpf(*data)
     lay = M_LAYER(
         10,
+        arr,
         11,
         9,
         125,
