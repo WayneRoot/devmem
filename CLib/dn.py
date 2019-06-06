@@ -106,8 +106,8 @@ free_any.argtypes = [c_void_p]
 # load_net.argtypes = [c_char_p, c_char_p, c_int]
 # load_net.restype = c_void_p
 
-# do_nms_obj = lib.do_nms_obj
-# do_nms_obj.argtypes = [POINTER(DETECTION), c_int, c_int, c_float]
+do_nms_obj = lib.do_nms_obj
+do_nms_obj.argtypes = [POINTER(DETECTION), c_int, c_int, c_float]
 
 # do_nms_sort = lib.do_nms_sort
 # do_nms_sort.argtypes = [POINTER(DETECTION), c_int, c_int, c_float]
@@ -194,6 +194,8 @@ def main():
     #dets = get_network_boxes(net, im.w, im.h, thresh, hier_thresh, None, 0, pnum)
     dets = get_network_boxes(pointer(lay), 768, 576, 0.5, 0.5, None, 1, pnum)
     print("%.3fmsec get_network_boxes"%(1000.*(time()-start)))
+    nms = 0.45
+    if (nms): do_nms_obj(dets, num, 20, nms);
 
     start = time()
     res = []
