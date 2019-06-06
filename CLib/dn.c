@@ -225,7 +225,7 @@ int candidate_comparator(const void *a, const void *b){
     const candidate *_b=b;
     if     (_a->prob > _b->prob) return -1;
     else if(_a->prob < _b->prob) return  1;
-    else                          return 0;
+    else                         return  0;
 }
 
 candidate *get_candidates(detection *dets, int n, int classes, int *outs)
