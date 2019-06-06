@@ -10,11 +10,6 @@ classes = [
     "pottedplant", "sheep", "sofa", "train", "tvmonitor"
 ]
 
-def c_array(ctype, values):
-    arr = (ctype*len(values))()
-    arr[:] = values
-    return arr
-
 class BOX(Structure):
     _fields_ = [("x", c_float),
                 ("y", c_float),
@@ -34,7 +29,7 @@ class DETECTION(Structure):
                 ("objectness", c_float),
                 ("sort_class", c_int)]
 
-class M_LAYER(Structure):
+class REGION_LAYER(Structure):
     _fields_ = [("outputs", c_int),
                 ("output",  POINTER(c_float)),
                 ("biases",  POINTER(c_float)),
@@ -49,34 +44,10 @@ class M_LAYER(Structure):
                 ("inputs",  c_int),
                 ("background", c_int)]
 
-class IMAGE(Structure):
-    _fields_ = [("w", c_int),
-                ("h", c_int),
-                ("c", c_int),
-                ("data", POINTER(c_float))]
-
-class METADATA(Structure):
-    _fields_ = [("classes", c_int),
-                ("names", POINTER(c_char_p))]
-
-    
-
 lib = CDLL("libdn.so", RTLD_GLOBAL)
-# lib.network_width.argtypes = [c_void_p]
-# lib.network_width.restype = c_int
-# lib.network_height.argtypes = [c_void_p]
-# lib.network_height.restype = c_int
-
-# predict = lib.network_predict
-# predict.argtypes = [c_void_p, POINTER(c_float)]
-# predict.restype = POINTER(c_float)
-
-# make_image = lib.make_image
-# make_image.argtypes = [c_int, c_int, c_int]
-# make_image.restype = IMAGE
 
 get_network_boxes = lib.get_network_boxes
-get_network_boxes.argtypes = [POINTER(M_LAYER), c_int, c_int, c_float, c_float, POINTER(c_int), c_int, POINTER(c_int)]
+get_network_boxes.argtypes = [POINTER(REGION_LAYER), c_int, c_int, c_float, c_float, POINTER(c_int), c_int, POINTER(c_int)]
 get_network_boxes.restype  = POINTER(DETECTION)
 
 get_candidates = lib.get_candidates
@@ -84,11 +55,7 @@ get_candidates.argtypes = [POINTER(DETECTION), c_int, c_int, POINTER(c_int)]
 get_candidates.restype  = POINTER(CANDIDATE)
 
 forward_region_layer = lib.forward_region_layer
-forward_region_layer.argtypes = [M_LAYER]
-
-# make_network_boxes = lib.make_network_boxes
-# make_network_boxes.argtypes = [c_void_p]
-# make_network_boxes.restype = POINTER(DETECTION)
+forward_region_layer.argtypes = [REGION_LAYER]
 
 free_detections = lib.free_detections
 free_detections.argtypes = [POINTER(DETECTION), c_int]
@@ -96,142 +63,66 @@ free_detections.argtypes = [POINTER(DETECTION), c_int]
 free_any = lib.free_any
 free_any.argtypes = [c_void_p]
 
-# free_ptrs = lib.free_ptrs
-# free_ptrs.argtypes = [POINTER(c_void_p), c_int]
-
-# network_predict = lib.network_predict
-# network_predict.argtypes = [c_void_p, POINTER(c_float)]
-
-# load_net = lib.load_network
-# load_net.argtypes = [c_char_p, c_char_p, c_int]
-# load_net.restype = c_void_p
-
 do_nms_obj = lib.do_nms_obj
 do_nms_obj.argtypes = [POINTER(DETECTION), c_int, c_int, c_float]
 
-# do_nms_sort = lib.do_nms_sort
-# do_nms_sort.argtypes = [POINTER(DETECTION), c_int, c_int, c_float]
+def postprocessing(predictions, im_w, im_h, score_threshold, iou_threshold):
 
-# free_image = lib.free_image
-# free_image.argtypes = [IMAGE]
+    p_predictions = predictions.ctypes.data_as(POINTER(c_float))
+    biases = np.asarray([1.08,1.19,  3.42,4.41,  6.63,11.38,  9.42,5.11,  16.62,10.52],dtype=np.float32)
+    p_biases = biases.ctypes.data_as(POINTER(c_float))
 
-# letterbox_image = lib.letterbox_image
-# letterbox_image.argtypes = [IMAGE, c_int, c_int]
-# letterbox_image.restype = IMAGE
+    lay = REGION_LAYER(
+        11*9*5*25,      # outputs 11x9x5*25
+        p_predictions,  # output
+        p_biases,       # biases
+        1,              # batch
+        1,              # softmax
+        0,              # softmax_tree
+        11,             # w
+        9,              # h
+        5,              # n
+        4,              # coords
+        20,             # classes
+        11*9*5*25,      # inputs
+        0               # background
+    )
+    forward_region_layer(lay)
 
-# load_meta = lib.get_metadata
-# lib.get_metadata.argtypes = [c_char_p]
-# lib.get_metadata.restype = METADATA
-
-# load_image = lib.load_image_color
-# load_image.argtypes = [c_char_p, c_int, c_int]
-# load_image.restype = IMAGE
-
-# rgbgr_image = lib.rgbgr_image
-# rgbgr_image.argtypes = [IMAGE]
-
-# predict_image = lib.network_predict_image
-# predict_image.argtypes = [c_void_p, IMAGE]
-# predict_image.restype = POINTER(c_float)
-
-def detect(net, meta, image, thresh=.5, hier_thresh=.5, nms=.45):
-    im = load_image(image, 0, 0)
     num = c_int(0)
     pnum = pointer(num)
-    predict_image(net, im)
-    dets = get_network_boxes(net, im.w, im.h, thresh, hier_thresh, None, 0, pnum)
-    num = pnum[0]
-    if (nms): do_nms_obj(dets, num, meta.classes, nms);
+    relative = c_int(0)
+    dets = get_network_boxes(pointer(lay), im_w, im_h, score_threshold, iou_threshold, None, relative, pnum)
 
-    res = []
-    for j in range(num):
-        for i in range(meta.classes):
-            if dets[j].prob[i] > 0:
-                b = dets[j].bbox
-                res.append((meta.names[i], dets[j].prob[i], (b.x, b.y, b.w, b.h)))
-    res = sorted(res, key=lambda x: -x[1])
-    free_image(im)
+    nms = 0.45
+    if (nms): do_nms_obj(dets, num, 20, nms);
+
+    candn= c_int(0)
+    cand = get_candidates(dets,num,c_int(lay.classes),byref(candn))
+
+    result = []
+    for i in range(candn.value):
+        clss = cand[i].clss
+        prob = cand[i].prob
+        bbox = cand[i].bbox
+        result.append((classes[clss], prob, (bbox.x, bbox.y, bbox.h, bbox.w)))
+    free_any(cand)
     free_detections(dets, num)
-    return res
-    
-def main():
+    return result
+
+def dn_main():
 
     filename = 'featuremap_8.txt'
     with open(filename) as f:
         txt_v       = f.read().strip().split()
         predictions = np.asarray([np.float32(re.sub(',','',i)) for i in txt_v])
-    p_predictions = predictions.ctypes.data_as(POINTER(c_float))
-    print [predictions[i] for i in range(10)]
     print("inference dummy",predictions.shape, filename)
-    biases = np.asarray([1.08,1.19,  3.42,4.41,  6.63,11.38,  9.42,5.11,  16.62,10.52],dtype=np.float32)
-    p_biases = biases.ctypes.data_as(POINTER(c_float))
-
-#    cpf = c_float*10
-#    data= [ float(i) for i in range(10)]
-#    output = cpf(*data)
-#    biases = cpf(*data)
-    # outputs = 12375
-    # biases[10]=1.08,1.19,  3.42,4.41,  6.63,11.38,  9.42,5.11,  16.62,10.52 == anchors
-    lay = M_LAYER(
-        12375,
-        p_predictions,
-        p_biases,
-        1,
-        0,
-        1,
-        11,
-        9,
-        5,
-        4,
-        20,
-        11*9*5*25,
-        0)
-    forward_region_layer(lay)
-    num = c_int(0)
-    pnum = pointer(num)
-
     start = time()
-    #dets = get_network_boxes(net, im.w, im.h, thresh, hier_thresh, None, 0, pnum)
-    dets = get_network_boxes(pointer(lay), 768, 576, 0.5, 0.5, None, 1, pnum)
-    nms = 0.45
-    if (nms): do_nms_obj(dets, num, 20, nms);
-    print("%.3fmsec get_network_boxes"%(1000.*(time()-start)))
-
-    start = time()
-    res = []
-    for j in range(num.value):
-        for i in range(20):
-            if dets[j].prob[i] > 0:
-                b = dets[j].bbox
-                res.append((classes[i], dets[j].prob[i], (b.x, b.y, b.w, b.h)))
-    print("%.3fmsec python loop"%(1000.*(time()-start)))
-
-    start = time()
-    res = sorted(res, key=lambda x: -x[1])
-    print("%.3fmsec python sort"%(1000.*(time()-start)))
-
-    start = time()
-    candn= c_int(0)
-    cand = get_candidates(dets,num,c_int(lay.classes),byref(candn))
-    print("%.3fmsec c loop"%(1000.*(time()-start)))
-
-    for i in range(candn.value):
-        clss = cand[i].clss
-        prob = cand[i].prob
-        bbox = cand[i].bbox
-        c = (classes[clss], prob, (bbox.x, bbox.y, bbox.h, bbox.w))
-        print("{}".format(c))
-    print("")
-    print(res)
-    print(num)
-    free_any(cand)
-    free_detections(dets, num)
+    res = postprocessing(predictions, 768, 576, 0.5, 0.5)
+    print("%.6fsec"%((time()-start)))
+    for r in res:
+        print("{}".format(r))
 
 if __name__ == "__main__":
-    main()
-    #net = load_net("cfg/tiny-yolo.cfg", "tiny-yolo.weights", 0)
-    #meta = load_meta("cfg/coco.data")
-    #r = detect(net, meta, "data/dog.jpg")
-    #print r
-    
+    dn_main()
 
