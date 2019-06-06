@@ -193,9 +193,9 @@ def main():
     start = time()
     #dets = get_network_boxes(net, im.w, im.h, thresh, hier_thresh, None, 0, pnum)
     dets = get_network_boxes(pointer(lay), 768, 576, 0.5, 0.5, None, 1, pnum)
-    print("%.3fmsec get_network_boxes"%(1000.*(time()-start)))
     nms = 0.45
     if (nms): do_nms_obj(dets, num, 20, nms);
+    print("%.3fmsec get_network_boxes"%(1000.*(time()-start)))
 
     start = time()
     res = []
