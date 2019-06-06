@@ -1,6 +1,7 @@
 from ctypes import *
 import math, sys, os, re
 import numpy as np
+from time import time
 
 classes = [
     "aeroplane", "bicycle", "bird", "boat", "bottle",
@@ -19,6 +20,11 @@ class BOX(Structure):
                 ("y", c_float),
                 ("w", c_float),
                 ("h", c_float)]
+
+class CANDIDATE(Structure):
+    _fields_ = [("clss", c_int),
+                ("prob",  c_float),
+                ("bbox",  BOX)]
 
 class DETECTION(Structure):
     _fields_ = [("bbox", BOX),
@@ -71,7 +77,11 @@ lib = CDLL("libdn.so", RTLD_GLOBAL)
 
 get_network_boxes = lib.get_network_boxes
 get_network_boxes.argtypes = [POINTER(M_LAYER), c_int, c_int, c_float, c_float, POINTER(c_int), c_int, POINTER(c_int)]
-get_network_boxes.restype = POINTER(DETECTION)
+get_network_boxes.restype  = POINTER(DETECTION)
+
+get_candidates = lib.get_candidates
+get_candidates.argtypes = [POINTER(DETECTION), c_int, c_int, POINTER(c_int)]
+get_candidates.restype  = POINTER(CANDIDATE)
 
 forward_region_layer = lib.forward_region_layer
 forward_region_layer.argtypes = [M_LAYER]
@@ -82,6 +92,9 @@ forward_region_layer.argtypes = [M_LAYER]
 
 free_detections = lib.free_detections
 free_detections.argtypes = [POINTER(DETECTION), c_int]
+
+free_any = lib.free_any
+free_any.argtypes = [c_void_p]
 
 # free_ptrs = lib.free_ptrs
 # free_ptrs.argtypes = [POINTER(c_void_p), c_int]
@@ -176,17 +189,39 @@ def main():
     forward_region_layer(lay)
     num = c_int(0)
     pnum = pointer(num)
+
+    start = time()
     #dets = get_network_boxes(net, im.w, im.h, thresh, hier_thresh, None, 0, pnum)
     dets = get_network_boxes(pointer(lay), 768, 576, 0.5, 0.5, None, 1, pnum)
+    print("%.3fmsec get_network_boxes"%(1000.*(time()-start)))
+
+    start = time()
     res = []
     for j in range(num.value):
         for i in range(20):
             if dets[j].prob[i] > 0:
                 b = dets[j].bbox
-                res.append((classes[i],dets[j].prob[i], (b.x, b.y, b.w, b.h)))
+                res.append((classes[i], dets[j].prob[i], (b.x, b.y, b.w, b.h)))
+    print("%.3fmsec python loop"%(1000.*(time()-start)))
+
+    start = time()
     res = sorted(res, key=lambda x: -x[1])
+    print("%.3fmsec python sort"%(1000.*(time()-start)))
+
+    start = time()
+    candn= c_int(0)
+    cand = get_candidates(dets,num,c_int(lay.classes),byref(candn))
+    print("%.3fmsec c loop"%(1000.*(time()-start)))
+
+    for i in range(candn.value):
+        clss = cand[i].clss
+        prob = cand[i].prob
+        bbox = cand[i].bbox
+        c = (classes[clss], prob, (bbox.x, bbox.y, bbox.h, bbox.w))
+        print("{}".format(c))
     print(res)
     print(num)
+    free_any(cand)
     free_detections(dets, num)
 
 if __name__ == "__main__":

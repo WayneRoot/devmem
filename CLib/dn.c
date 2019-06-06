@@ -8,6 +8,12 @@ typedef struct{
     float x, y, w, h;
 } box;
 
+typedef struct candidate{
+    int   class;
+    float prob;
+    box   bbox;
+} candidate;
+
 typedef struct detection{
     box bbox;
     int classes;
@@ -184,21 +190,6 @@ void fill_network_boxes(m_layer *l_p, int w, int h, float thresh, float hier, in
 /*
 //gdb:num_detections (net=0x897de0, thresh=0.5)
 int num_detections(network *net, float thresh)
-{
-    int i;
-    int s = 0;
-    for(i = 0; i < net->n; ++i){
-        layer l = net->layers[i];
-        if(l.type == YOLO){
-            s += yolo_num_detections(l, thresh);
-        }
-        if(l.type == DETECTION || l.type == REGION){
-            s += l.w*l.h*l.n;
-        }
-    }
-// 11x9x5 = 495 = s
-    return s;
-}
 */
 
 detection *make_network_boxes(m_layer *l_p, float thresh, int *num)
@@ -222,15 +213,27 @@ detection *make_network_boxes(m_layer *l_p, float thresh, int *num)
 detection *get_network_boxes(m_layer *l_p, int w, int h, float thresh, float hier, int *map, int relative, int *num)
 {
     int i;
-    for(i=0;i<10;i++){
-        printf("%f\n",l_p->output[i]);
-//        printf("%f\n",l_p->biases[i]);
-    }
-    printf("%d\n",l_p->coords);
     //gdb:make_network_boxes (net=0x897de0, thresh=0.5, num=0x7fffffffdcbc)
     detection *dets = make_network_boxes(l_p, thresh, num);
     fill_network_boxes(l_p, w, h, thresh, hier, map, relative, dets);
     return dets;
+}
+
+candidate *get_candidates(detection *dets, int n, int classes, int *outs)
+{
+    int i,j;
+    candidate *cand=calloc(n, sizeof(candidate));
+    for(j=0;j<n;j++)
+        for(i=0;i<classes;i++){
+            if(dets[j].prob[i]>0.0){
+            //    printf("%d %d %d %d\n",i,n,classes,*outs);
+                cand[*outs].class = i;
+                cand[*outs].prob  = dets[j].prob[i];
+                cand[*outs].bbox  = dets[j].bbox;
+                (*outs)++;
+            }
+        }
+    return cand;
 }
 
 void free_detections(detection *dets, int n)
@@ -242,4 +245,6 @@ void free_detections(detection *dets, int n)
     }
     free(dets);
 }
+
+void free_any(void *ptr){free(ptr);}
 
