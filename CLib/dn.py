@@ -219,6 +219,7 @@ def main():
         bbox = cand[i].bbox
         c = (classes[clss], prob, (bbox.x, bbox.y, bbox.h, bbox.w))
         print("{}".format(c))
+    print("")
     print(res)
     print(num)
     free_any(cand)

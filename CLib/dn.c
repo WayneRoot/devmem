@@ -3,6 +3,7 @@
 #include <string.h>
 #include <math.h>
 #include <float.h>
+#include <stdlib.h>
 
 typedef struct{
     float x, y, w, h;
@@ -219,6 +220,18 @@ detection *get_network_boxes(m_layer *l_p, int w, int h, float thresh, float hie
     return dets;
 }
 
+int candidate_comparator(const void *a, const void *b){
+    const candidate *_a=a;
+    const candidate *_b=b;
+    if     (_a->prob > _b->prob) return -1;
+    else if(_a->prob < _b->prob) return  1;
+    else                          return 0;
+}
+
+void qsort_candidates(candidate *cand, int n){
+    qsort(cand, n, sizeof(candidate),candidate_comparator);
+}
+
 candidate *get_candidates(detection *dets, int n, int classes, int *outs)
 {
     int i,j;
@@ -233,6 +246,7 @@ candidate *get_candidates(detection *dets, int n, int classes, int *outs)
                 (*outs)++;
             }
         }
+    qsort_candidates(cand,*outs);
     return cand;
 }
 
