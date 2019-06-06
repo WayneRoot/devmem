@@ -2,6 +2,13 @@ from ctypes import *
 import math, sys, os, re
 import numpy as np
 
+classes = [
+    "aeroplane", "bicycle", "bird", "boat", "bottle",
+    "bus", "car", "cat", "chair", "cow",
+    "diningtable", "dog", "horse", "motorbike", "person",
+    "pottedplant", "sheep", "sofa", "train", "tvmonitor"
+]
+
 def c_array(ctype, values):
     arr = (ctype*len(values))()
     arr[:] = values
@@ -25,11 +32,15 @@ class M_LAYER(Structure):
     _fields_ = [("outputs", c_int),
                 ("output",  POINTER(c_float)),
                 ("biases",  POINTER(c_float)),
+                ("batch",   c_int),
+                ("softmax", c_int),
+                ("softmax_tree",   c_int),
                 ("w",       c_int),
                 ("h",       c_int),
                 ("n",       c_int),
                 ("coords",  c_int),
                 ("classes", c_int),
+                ("inputs",  c_int),
                 ("background", c_int)]
 
 class IMAGE(Structure):
@@ -44,7 +55,7 @@ class METADATA(Structure):
 
     
 
-lib = CDLL("dn.so", RTLD_GLOBAL)
+lib = CDLL("libdn.so", RTLD_GLOBAL)
 # lib.network_width.argtypes = [c_void_p]
 # lib.network_width.restype = c_int
 # lib.network_height.argtypes = [c_void_p]
@@ -61,6 +72,9 @@ lib = CDLL("dn.so", RTLD_GLOBAL)
 get_network_boxes = lib.get_network_boxes
 get_network_boxes.argtypes = [POINTER(M_LAYER), c_int, c_int, c_float, c_float, POINTER(c_int), c_int, POINTER(c_int)]
 get_network_boxes.restype = POINTER(DETECTION)
+
+forward_region_layer = lib.forward_region_layer
+forward_region_layer.argtypes = [M_LAYER]
 
 # make_network_boxes = lib.make_network_boxes
 # make_network_boxes.argtypes = [c_void_p]
@@ -132,32 +146,46 @@ def main():
     filename = 'featuremap_8.txt'
     with open(filename) as f:
         txt_v       = f.read().strip().split()
-        predictions = np.asarray([np.float(re.sub(',','',i)) for i in txt_v])
+        predictions = np.asarray([np.float32(re.sub(',','',i)) for i in txt_v])
+    p_predictions = predictions.ctypes.data_as(POINTER(c_float))
+    print [predictions[i] for i in range(10)]
     print("inference dummy",predictions.shape, filename)
     biases = np.asarray([1.08,1.19,  3.42,4.41,  6.63,11.38,  9.42,5.11,  16.62,10.52],dtype=np.float32)
-    sys.exit(-1)
-    cpf = c_float*10
-    data= [ float(i) for i in range(10)]
-    output = cpf(*data)
-    biases = cpf(*data)
+    p_biases = biases.ctypes.data_as(POINTER(c_float))
+
+#    cpf = c_float*10
+#    data= [ float(i) for i in range(10)]
+#    output = cpf(*data)
+#    biases = cpf(*data)
     # outputs = 12375
     # biases[10]=1.08,1.19,  3.42,4.41,  6.63,11.38,  9.42,5.11,  16.62,10.52 == anchors
     lay = M_LAYER(
         12375,
-        output,
-        biases,
+        p_predictions,
+        p_biases,
+        1,
+        0,
+        1,
         11,
         9,
-        125,
+        5,
         4,
         20,
+        11*9*5*25,
         0)
+    forward_region_layer(lay)
     num = c_int(0)
     pnum = pointer(num)
     #dets = get_network_boxes(net, im.w, im.h, thresh, hier_thresh, None, 0, pnum)
     dets = get_network_boxes(pointer(lay), 768, 576, 0.5, 0.5, None, 1, pnum)
-    for i in range(10):
-        print("dets {} {}".format(type(dets),dets[i].classes))
+    res = []
+    for j in range(num.value):
+        for i in range(20):
+            if dets[j].prob[i] > 0:
+                b = dets[j].bbox
+                res.append((classes[i],dets[j].prob[i], (b.x, b.y, b.w, b.h)))
+    res = sorted(res, key=lambda x: -x[1])
+    print(res)
     print(num)
 
 if __name__ == "__main__":

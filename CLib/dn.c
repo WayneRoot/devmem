@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <malloc.h>
+#include <string.h>
 #include <math.h>
+#include <float.h>
 
 typedef struct{
     float x, y, w, h;
@@ -19,8 +21,12 @@ typedef struct m_layer{
     int outputs;
     float *output;
     float *biases;
+    int batch;
+    int softmax;
+    int softmax_tree;
     int w,h,n;
     int coords,classes;
+    int inputs;
     int background;
 } m_layer;
 int entry_index(m_layer l, int batch, int location, int entry)
@@ -30,7 +36,67 @@ int entry_index(m_layer l, int batch, int location, int entry)
     return batch*l.outputs + n*l.w*l.h*(l.coords+l.classes+1) + entry*l.w*l.h + loc;
 }
 
-//correct_region_boxes (dets=0x145be30, n=495, w=768, h=576, netw=352, neth=288, relative=1)
+static inline float logistic_activate(float x){return 1./(1. + exp(-x));}
+void activate_array(float *x, const int n)
+{
+    int i;
+    for(i = 0; i < n; ++i){
+        x[i] = logistic_activate(x[i]);
+    }
+}
+
+void softmax(float *input, int n, float temp, int stride, float *output)
+{
+    int i;
+    float sum = 0;
+    float largest = -FLT_MAX;
+    for(i = 0; i < n; ++i){
+        if(input[i*stride] > largest) largest = input[i*stride];
+    }
+    for(i = 0; i < n; ++i){
+        float e = exp(input[i*stride]/temp - largest/temp);
+        sum += e;
+        output[i*stride] = e;
+    }
+    for(i = 0; i < n; ++i){
+        output[i*stride] /= sum;
+    }
+}
+
+void softmax_cpu(float *input, int n, int batch, int batch_offset, int groups, int group_offset, int stride, float temp, float *output)
+{
+    int g, b;
+    for(b = 0; b < batch; ++b){
+        for(g = 0; g < groups; ++g){
+            softmax(input + b*batch_offset + g*group_offset, n, temp, stride, output + b*batch_offset + g*group_offset);
+        }
+    }
+}
+
+void forward_region_layer(m_layer l)
+{
+    int i,j,b,t,n;
+    //memcpy(l.output, net.input, l.outputs*l.batch*sizeof(float));
+    float *net_input = calloc(l.outputs, sizeof(float));
+    memcpy(net_input, l.output, l.outputs*l.batch*sizeof(float));
+
+    for (b = 0; b < l.batch; ++b){
+        for(n = 0; n < l.n; ++n){
+            int index = entry_index(l, b, n*l.w*l.h, 0);
+            activate_array(l.output + index, 2*l.w*l.h);
+            index = entry_index(l, b, n*l.w*l.h, l.coords);
+            if(!l.background) activate_array(l.output + index, l.w*l.h);
+            index = entry_index(l, b, n*l.w*l.h, l.coords + 1);
+            if(!l.softmax && !l.softmax_tree) activate_array(l.output + index, l.classes*l.w*l.h);
+        }
+    }
+    {
+        int index = entry_index(l, 0, 0, l.coords + !l.background);
+        softmax_cpu(net_input + index, l.classes + l.background, l.batch*l.n, l.inputs/l.n, l.w*l.h, 1, l.w*l.h, 1, l.output + index);
+    }
+    free(net_input);
+}
+//gdb:correct_region_boxes (dets=0x145be30, n=495, w=768, h=576, netw=352, neth=288, relative=1)
 void correct_region_boxes(detection *dets, int n, int w, int h, int netw, int neth, int relative)
 {
     int i;
@@ -69,7 +135,7 @@ box get_region_box(float *x, float *biases, int n, int index, int i, int j, int 
     return b;
 }
 
-//get_region_detections (l=..., w=768, h=576, netw=352, neth=288, thresh=0.5, map=0x0, tree_thresh=0.5, relative=1, dets=0x145be30)
+//gdb:get_region_detections (l=..., w=768, h=576, netw=352, neth=288, thresh=0.5, map=0x0, tree_thresh=0.5, relative=1, dets=0x145be30)
 void get_region_detections(m_layer l, int w, int h, int netw, int neth, float thresh, int *map, float tree_thresh, int relative, detection *dets)
 {
     int i,j,n,z;
@@ -107,7 +173,7 @@ void get_region_detections(m_layer l, int w, int h, int netw, int neth, float th
     correct_region_boxes(dets, l.w*l.h*l.n, w, h, netw, neth, relative);
 }
 
-//fill_network_boxes (net=0x897de0, w=768, h=576, thresh=0.5, hier=0.5, map=0x0, relative=1, dets=0x145be30)
+//gdb:fill_network_boxes (net=0x897de0, w=768, h=576, thresh=0.5, hier=0.5, map=0x0, relative=1, dets=0x145be30)
 void fill_network_boxes(m_layer *l_p, int w, int h, float thresh, float hier, int *map, int relative, detection *dets)
 {
     int j;
@@ -116,7 +182,7 @@ void fill_network_boxes(m_layer *l_p, int w, int h, float thresh, float hier, in
     get_region_detections(l, w, h, l_p->w, l_p->h, thresh, map, hier, relative, dets);
 }
 /*
-//num_detections (net=0x897de0, thresh=0.5)
+//gdb:num_detections (net=0x897de0, thresh=0.5)
 int num_detections(network *net, float thresh)
 {
     int i;
@@ -139,7 +205,7 @@ detection *make_network_boxes(m_layer *l_p, float thresh, int *num)
 {
     //layer l = net->layers[net->n - 1];
     int i;
-    //      495  = num_detections (net=0x897de0, thresh=0.5)
+    //gdb:  495  = num_detections (net=0x897de0, thresh=0.5)
     //int nboxes = num_detections(net, thresh);
     m_layer l=*l_p;
     int nboxes = l.w*l.h*l.n;
@@ -156,10 +222,12 @@ detection *make_network_boxes(m_layer *l_p, float thresh, int *num)
 detection *get_network_boxes(m_layer *l_p, int w, int h, float thresh, float hier, int *map, int relative, int *num)
 {
     int i;
-    for(i=0;i<10;i++)
+    for(i=0;i<10;i++){
         printf("%f\n",l_p->output[i]);
+//        printf("%f\n",l_p->biases[i]);
+    }
     printf("%d\n",l_p->coords);
-    //make_network_boxes (net=0x897de0, thresh=0.5, num=0x7fffffffdcbc)
+    //gdb:make_network_boxes (net=0x897de0, thresh=0.5, num=0x7fffffffdcbc)
     detection *dets = make_network_boxes(l_p, thresh, num);
     fill_network_boxes(l_p, w, h, thresh, hier, map, relative, dets);
     return dets;
