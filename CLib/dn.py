@@ -80,8 +80,8 @@ forward_region_layer.argtypes = [M_LAYER]
 # make_network_boxes.argtypes = [c_void_p]
 # make_network_boxes.restype = POINTER(DETECTION)
 
-# free_detections = lib.free_detections
-# free_detections.argtypes = [POINTER(DETECTION), c_int]
+free_detections = lib.free_detections
+free_detections.argtypes = [POINTER(DETECTION), c_int]
 
 # free_ptrs = lib.free_ptrs
 # free_ptrs.argtypes = [POINTER(c_void_p), c_int]
@@ -187,6 +187,7 @@ def main():
     res = sorted(res, key=lambda x: -x[1])
     print(res)
     print(num)
+    free_detections(dets, num)
 
 if __name__ == "__main__":
     main()

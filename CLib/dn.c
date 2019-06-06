@@ -232,3 +232,14 @@ detection *get_network_boxes(m_layer *l_p, int w, int h, float thresh, float hie
     fill_network_boxes(l_p, w, h, thresh, hier, map, relative, dets);
     return dets;
 }
+
+void free_detections(detection *dets, int n)
+{
+    int i;
+    for(i = 0; i < n; ++i){
+        free(dets[i].prob);
+        if(dets[i].mask) free(dets[i].mask);
+    }
+    free(dets);
+}
+
