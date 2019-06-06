@@ -228,10 +228,6 @@ int candidate_comparator(const void *a, const void *b){
     else                          return 0;
 }
 
-void qsort_candidates(candidate *cand, int n){
-    qsort(cand, n, sizeof(candidate),candidate_comparator);
-}
-
 candidate *get_candidates(detection *dets, int n, int classes, int *outs)
 {
     int i,j;
@@ -239,14 +235,13 @@ candidate *get_candidates(detection *dets, int n, int classes, int *outs)
     for(j=0;j<n;j++)
         for(i=0;i<classes;i++){
             if(dets[j].prob[i]>0.0){
-            //    printf("%d %d %d %d\n",i,n,classes,*outs);
                 cand[*outs].class = i;
                 cand[*outs].prob  = dets[j].prob[i];
                 cand[*outs].bbox  = dets[j].bbox;
                 (*outs)++;
             }
         }
-    qsort_candidates(cand,*outs);
+    qsort(cand, *outs, sizeof(candidate),candidate_comparator);
     return cand;
 }
 
