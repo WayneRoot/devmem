@@ -89,7 +89,7 @@ def preprocessing(input_image,ph_height,ph_width):
 
   #resized_chwRGB /= 255.
 
-  image_nchwRGB  = np.expand_dims(resized_chwRGB, 0) # NCHW BGR
+  image_nchwRGB  = np.expand_dims(resized_chwRGB, 0) # NCHW RGB
 
   #return input_image
   return image_nchwRGB
