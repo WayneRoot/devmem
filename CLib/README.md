@@ -27,4 +27,3 @@ Download udmabuf kernel module from github and make and insmod.
    /dev/udmabuf0
  # cat /sys/class/udmabuf/udmabuf0/phys_addr 
    0x3f500000                            # physical_address
-```
