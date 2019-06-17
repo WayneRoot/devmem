@@ -27,3 +27,13 @@ Download udmabuf kernel module from github and make and insmod.
    /dev/udmabuf0
  # cat /sys/class/udmabuf/udmabuf0/phys_addr 
    0x3f500000                            # physical_address
+```
+
+Check to area by udmabuf kernel module.  
+```
+ $ echo 'Hello world' > abc.txt
+ # cat abc.txt > /dev/udmabuf0
+ # cat /dev/udmabuf0 > efg.txt
+ # head -1 efg.txt
+   Hello world
+```
