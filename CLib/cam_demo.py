@@ -18,6 +18,7 @@ args.add_argument('-k','--keep',type=int,default=600)
 args.add_argument('-vn','--videoNo',type=int,default=0)
 args.add_argument('-th','--thread',action='store_true')
 args.add_argument('-dma',action='store_true')
+args.add_argument('--debug_log',action='store_true')
 args.add_argument('-phys','--phys_addr',type=str,default='/sys/class/udmabuf/udmabuf0/phys_addr')
 args.add_argument('-cm','--cammode',type=str,default='qvga',choices=['qvga','vga','svga'])
 args.add_argument('--cam_h',type=int,default=640)
@@ -119,7 +120,14 @@ class UVC:
         assert self.r is True
         self.cont  = True
         self.thread= None
+        self.rea_time = 0
         self.pre_time = 0
+    def read_image(self):
+        rea_start = time()
+        r,self.frame = self.cap.read()
+        assert r is True
+        self.rea_time= time() - rea_start
+        return r, self.frame
     def prep_Qi(self):
         pre_start= time()
         preprocessed_nchwRGB = preprocessing(self.frame, 288, 352)
@@ -131,11 +139,9 @@ class UVC:
     def _read_task(self):
         while True:
             if not self.cont:break
-            r,self.frame = self.cap.read()
-            assert r is True
-#            if self.thread is None:
-#                self.r,self.frame = self.cap.read()
-#                assert self.r is True
+#            r,self.frame = self.cap.read()
+#            assert r is True
+            r, self.frame = self.read_image()
             self.prep_Qi()
         self.cap.release()
     def start(self):
@@ -146,10 +152,13 @@ class UVC:
         self.cont=False
         self.thread.join()
     def read(self):
-        r,self.frame = self.cap.read()
-        assert r is True
+#        r,self.frame = self.cap.read()
+#        assert r is True
+        self.r, self.frame = self.read_image()
         self.prep_Qi()
-        return self.r, self.frame, self.pre_time
+        return self.r, self.frame
+    def timer(self):
+        return self.rea_time, self.pre_time, self.rea_time + self.pre_time
 
 def box2rect(box):
     x, y, h, w = box
@@ -270,6 +279,7 @@ def fpga_proc(qi, qp, qs, ph_height, ph_width,devmem_image, devmem_start, devmem
         qs.put([wrt,exe,ret,(time()-start)/infers])
     dn.close_predictions()
 
+QUEUE_SIZE=30
 def main():
     me_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -277,9 +287,9 @@ def main():
     score_threshold = 0.3
     iou_threshold = 0.3
 
-    qi = Queue(3)
-    qp = Queue(3)
-    qs = Queue(3)
+    qi = Queue(QUEUE_SIZE)
+    qp = Queue(QUEUE_SIZE)
+    qs = Queue(QUEUE_SIZE)
 
     if args.thread:
         cap = UVC(qi, deviceNo=args.videoNo, cammode=args.cammode).start()
@@ -298,7 +308,8 @@ def main():
     fpga_total = wrt_stage = exe_stage = ret_stage = loo_stage = 1.
     while True:
         cap_start = time()
-        r,frame,pre_time = cap.read()
+        r,frame   = cap.read()
+        rea_time, pre_time, cam_time = cap.timer()
         assert r is True and frame is not None
         cap_time = time() - cap_start
         images  += 1
@@ -314,10 +325,7 @@ def main():
             pass
 
         try:
-            wrt, exe, ret, loo_stage = qs.get_nowait()
-            if wrt > 0. : wrt_stage = wrt
-            if exe > 0. : exe_stage = exe
-            if ret > 0. : ret_stage = ret
+            wrt_stage, exe_stage, ret_stage, loo_stage = qs.get_nowait()
         except:
             pass
 
@@ -350,15 +358,20 @@ def main():
             stages = exe_stage + ret_stage
         else:
             stages = wrt_stage + exe_stage + ret_stage
-        stages = loo_stage
         if stages == 0.: stages=1.
         scr_time = time() - scr_start
         sys.stdout.write('\b'*100)
-        msg=('FPGA/CAM: %7.1fFPS(%5.1f%5.1f%5.1f) PLAY:%5.1fFPS(%5.1f:%5.1f%5.1f%5.1f%5.1f) %d objects'%(
+        if args.debug_log:
+            msg=('FPGA/CAM: %7.1fFPS(%5.1f%5.1f%5.1f) PLAY:%5.1fFPS(%5.1f:%5.1f%5.1f%5.1f%5.1f) %d objects'%(
             1./(stages), 1000.*wrt_stage, 1000.*exe_stage, 1000.*ret_stage,
             images/colapse, 1000.*colapse/images, 1000.*cap_time, 1000.*pre_time, 1000.*pos_time, 1000.*scr_time, objects
-        ))
-        msg = str(msg)[:88]
+            ))
+            msg = str(msg)[:88]
+        else:
+            msg=('CAMERA: %7.1fFPS  FPGA:%7.1fmsec  PLATBACK:%7.1fFPS %d objects'%(
+            1./cam_time, 1000.*stages, 1./(time() - cap_start), objects
+            ))
+            msg = str(msg)[:88]
         sys.stdout.write(msg)
         sys.stdout.flush()
 
