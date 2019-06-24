@@ -368,7 +368,7 @@ def main():
             ))
             msg = str(msg)[:88]
         else:
-            msg=('CAMERA: %7.1fFPS  FPGA:%7.1fmsec  PLATBACK:%7.1fFPS %d objects'%(
+            msg=('CAMERA: %7.1fFPS  FPGA:%7.1fmsec  PLAYBACK:%7.1fFPS %d objects'%(
             1./cam_time, 1000.*stages, 1./(time() - cap_start), objects
             ))
             msg = str(msg)[:88]
