@@ -156,7 +156,7 @@ class UVC:
 #        assert r is True
         self.r, self.frame = self.read_image()
         self.prep_Qi()
-        return self.r, self.frame
+        return self.r, self.frame, self.rea_time, self.pre_time, self.rea_time + self.pre_time
     def timer(self):
         return self.rea_time, self.pre_time, self.rea_time + self.pre_time
 
@@ -298,7 +298,7 @@ def main():
     args.cam_w = cap.get(3)
     args.cam_h = cap.get(4)
 
-    objects = images = 0
+    sum_cam = objects = images = 0
     colapse = 0
     verbose=False
     fp = Process(target=fpga_proc, args=(qi, qp, qs, ph_height, ph_width, devmem_image, devmem_start, devmem_stat, devmem_pred, devmem_pfmc,))
@@ -308,8 +308,8 @@ def main():
     fpga_total = wrt_stage = exe_stage = ret_stage = loo_stage = 1.
     while True:
         cap_start = time()
-        r,frame   = cap.read()
-        rea_time, pre_time, cam_time = cap.timer()
+        r,frame,rea_time, pre_time, cam_time   = cap.read()
+#        rea_time, pre_time, cam_time = cap.timer()
         assert r is True and frame is not None
         cap_time = time() - cap_start
         images  += 1
@@ -368,8 +368,10 @@ def main():
             ))
             msg = str(msg)[:88]
         else:
+            sum_cam += cam_time
             msg=('CAMERA: %7.1fFPS  FPGA:%7.1fmsec  PLAYBACK:%7.1fFPS %d objects'%(
-            1./cam_time, 1000.*stages, 1./(time() - cap_start), objects
+            images/sum_cam, 1000.*stages, 1./(time() - cap_start), objects
+ #           1./cam_time, 1000.*stages, 1./(time() - cap_start), objects
             ))
             msg = str(msg)[:88]
         sys.stdout.write(msg)
