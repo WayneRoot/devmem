@@ -38,9 +38,7 @@ def backgrounder(image_path):
     fbB.close()
     os.system("figlet HST")
     print("virtual_size:",fb0.vw,fb0.vh)
-    print("camra :",args.cam_w, args.cam_h)
-    print("shrink:1/%d"%args.shrink)
-    print("DMA Mode",args.dma)
+    print("camra :",args.cam_w, args.cam_h, "shrink:1/%d"%args.shrink, "thread:", args.thread, "DMA Mode:", args.dma)
 
 fb0 = fb(shrink=args.shrink)
 backgrounder(args.background)
@@ -101,20 +99,44 @@ colors = [(254.0, 254.0, 254), (239.8, 211.6, 127),
 anchors = [1.08,1.19,  3.42,4.41,  6.63,11.38,  9.42,5.11,  16.62,10.52]
 
 class UVC:
-    def __init__(self,deviceNo=0):
+    def __init__(self, qi, deviceNo=0, cammode='vga'):
+        self.qi = qi
         assert os.path.exists('/dev/video'+str(deviceNo))
-        self.cap = cv2.VideoCapture(deviceNo)
+        cap = self.cap = cv2.VideoCapture(deviceNo)
         assert self.cap is not None
+        print("cam.property-default:",cap.get(3),cap.get(4))
+        if cammode=='vga':
+            cap.set(3,640)  # 3:width
+            cap.set(4,480)  # 4:height
+        elif cammode=='svga':
+            cap.set(3,800)  # 3:width
+            cap.set(4,600)  # 4:height
+        elif cammode=='qvga':
+            cap.set(3,320)  # 3:width
+            cap.set(4,240)  # 4:height
+        print("cam.property-set:",cap.get(3),cap.get(4),cammode)
         self.r,self.frame = self.cap.read()
         assert self.r is True
         self.cont  = True
         self.thread= None
+        self.pre_time = 0
+    def prep_Qi(self):
+        pre_start= time()
+        preprocessed_nchwRGB = preprocessing(self.frame, 288, 352)
+        if self.qi.full(): self.qi.get()
+        self.qi.put(preprocessed_nchwRGB)
+        self.pre_time = time() - pre_start
+    def get(self, attr):
+        return self.cap.get(attr)
     def _read_task(self):
         while True:
             if not self.cont:break
             r,self.frame = self.cap.read()
             assert r is True
-            sleep(0.003)
+#            if self.thread is None:
+#                self.r,self.frame = self.cap.read()
+#                assert self.r is True
+            self.prep_Qi()
         self.cap.release()
     def start(self):
         self.thread = threading.Thread(target=self._read_task,args=())
@@ -124,7 +146,10 @@ class UVC:
         self.cont=False
         self.thread.join()
     def read(self):
-        return self.r, self.frame
+        r,self.frame = self.cap.read()
+        assert r is True
+        self.prep_Qi()
+        return self.r, self.frame, self.pre_time
 
 def box2rect(box):
     x, y, h, w = box
@@ -136,16 +161,10 @@ def box2rect(box):
 def preprocessing(input_image,ph_height,ph_width):
 
   resized_image  = cv2.resize(input_image,(ph_width, ph_height))
-
   resized_image  = cv2.cvtColor(resized_image,cv2.COLOR_BGR2RGB)
-
   resized_chwRGB = resized_image.transpose((2,0,1))  # CHW RGB
-
   #resized_chwRGB /= 255.
-
   image_nchwRGB  = np.expand_dims(resized_chwRGB, 0) # NCHW RGB
-
-  #return input_image
   return image_nchwRGB
 
 class Core:
@@ -233,8 +252,10 @@ def fpga_proc(qi, qp, qs, ph_height, ph_width,devmem_image, devmem_start, devmem
     print 'start fpga processing'
     dn.open_predictions(0xe0000000,11*9*125)
     core = Core()
-    exe_prev = 0.
+    infers = 0
+    start = time()
     while True:
+        infers += 1
         preprocessed_nchwRGB = qi.get()
         if args.dma:
             latest, wrt, exe, ret = core.fpga_dma(
@@ -246,7 +267,7 @@ def fpga_proc(qi, qp, qs, ph_height, ph_width,devmem_image, devmem_start, devmem
             if qp.full(): qp.get()
             qp.put(latest)
         if qs.full(): qs.get()
-        qs.put([wrt,exe,ret])
+        qs.put([wrt,exe,ret,(time()-start)/infers])
     dn.close_predictions()
 
 def main():
@@ -256,43 +277,32 @@ def main():
     score_threshold = 0.3
     iou_threshold = 0.3
 
+    qi = Queue(3)
+    qp = Queue(3)
+    qs = Queue(3)
+
     if args.thread:
-        cap = UVC().start()
+        cap = UVC(qi, deviceNo=args.videoNo, cammode=args.cammode).start()
     else:
-        cap = cv2.VideoCapture(args.videoNo)
-        assert cap is not None
-        print("cam.property-default:",cap.get(3),cap.get(4))
-        if args.cammode=='vga':
-            cap.set(3,640)  # 3:width
-            cap.set(4,480)  # 4:height
-        elif args.cammode=='svga':
-            cap.set(3,800)  # 3:width
-            cap.set(4,600)  # 4:height
-        elif args.cammode=='qvga':
-            cap.set(3,320)  # 3:width
-            cap.set(4,240)  # 4:height
-        print("cam.property-set:",cap.get(3),cap.get(4),args.cammode)
-        args.cam_w = cap.get(3)
-        args.cam_h = cap.get(4)
+        cap = UVC(qi, deviceNo=args.videoNo, cammode=args.cammode)
+    args.cam_w = cap.get(3)
+    args.cam_h = cap.get(4)
 
     objects = images = 0
     colapse = 0
     verbose=False
-    qi = Queue(3)
-    qp = Queue(3)
-    qs = Queue(3)
     fp = Process(target=fpga_proc, args=(qi, qp, qs, ph_height, ph_width, devmem_image, devmem_start, devmem_stat, devmem_pred, devmem_pfmc,))
     latest_res=[]
     fp.start()
     start = time()
-    fpga_total = wrt_stage = exe_stage = ret_stage = 0
+    fpga_total = wrt_stage = exe_stage = ret_stage = loo_stage = 1.
     while True:
-        r,frame = cap.read()
+        cap_start = time()
+        r,frame,pre_time = cap.read()
         assert r is True and frame is not None
-        preprocessed_nchwRGB = preprocessing(frame, ph_height, ph_width)
-        if qi.full(): qi.get()
-        qi.put(preprocessed_nchwRGB)
+        cap_time = time() - cap_start
         images  += 1
+        pos_start= time()
 
         try:
             predictions= qp.get_nowait()
@@ -304,7 +314,7 @@ def main():
             pass
 
         try:
-            wrt, exe, ret= qs.get_nowait()
+            wrt, exe, ret, loo_stage = qs.get_nowait()
             if wrt > 0. : wrt_stage = wrt
             if exe > 0. : exe_stage = exe
             if ret > 0. : ret_stage = ret
@@ -328,6 +338,8 @@ def main():
                 cv2.FONT_HERSHEY_SIMPLEX,1,
                 obj_col,
                 2)
+        pos_time = time() - pos_start
+        scr_start= time()
         colapse = time()-start
         if (int(colapse)%args.keep)==0:
             image_path = random.choice(glob.glob(os.path.join(me_dir,'debian*.jpg')))
@@ -338,12 +350,16 @@ def main():
             stages = exe_stage + ret_stage
         else:
             stages = wrt_stage + exe_stage + ret_stage
+        stages = loo_stage
         if stages == 0.: stages=1.
-        sys.stdout.write('\b'*80)
-        sys.stdout.write('%7.1fFPS(%5.1f%5.1f%5.1f) playback:%5.1fFPS(%5.1fmsec) %d objects'%(
+        scr_time = time() - scr_start
+        sys.stdout.write('\b'*100)
+        msg=('FPGA/CAM: %7.1fFPS(%5.1f%5.1f%5.1f) PLAY:%5.1fFPS(%5.1f:%5.1f%5.1f%5.1f%5.1f) %d objects'%(
             1./(stages), 1000.*wrt_stage, 1000.*exe_stage, 1000.*ret_stage,
-            images/colapse, 1000.*colapse/images, objects
+            images/colapse, 1000.*colapse/images, 1000.*cap_time, 1000.*pre_time, 1000.*pos_time, 1000.*scr_time, objects
         ))
+        msg = str(msg)[:88]
+        sys.stdout.write(msg)
         sys.stdout.flush()
 
 if __name__ == '__main__':
