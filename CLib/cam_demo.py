@@ -152,8 +152,13 @@ class UVC:
         self.cont=False
         self.thread.join()
     def read(self):
-#        r,self.frame = self.cap.read()
-#        assert r is True
+# BUG: At multi-task mode don't read from camera and only return self.frame
+#       # Use self.frame at multi-task mode
+#       if self.thread is not None:
+#           r,self.frame = self.cap.read()
+#           assert r is True
+#           self.prep_Qi()
+#       return True, self.frame
         self.r, self.frame = self.read_image()
         self.prep_Qi()
         return self.r, self.frame, self.rea_time, self.pre_time, self.rea_time + self.pre_time
