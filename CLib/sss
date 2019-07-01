@@ -24,6 +24,6 @@ fi
 # -cm  : Camera resolutin mode choice of qvga, vga, svga
 #
 KEEP=120
-#python ./devmem/CLib/cam_demo.py -k ${KEEP} -dma -cm vga
-python ./devmem/CLib/cam_demo.py -k ${KEEP} -dma -cm svga -th
+#python ./devmem/CLib/cam_demo.py -k ${KEEP} -dma -cm vga -th
+python ./devmem/CLib/cam_demo.py -k ${KEEP} -dma -cm svga
 
