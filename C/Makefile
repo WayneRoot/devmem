@@ -6,17 +6,13 @@ UCLINUX_BUILD_USER = 1
 include	$(ROOTDIR)/.config
 LIBCDIR	= $(CONFIG_LIBCDIR)
 include	$(ROOTDIR)/config.arch
-else
-CROSS	:= arm-linux-gnueabi
-ifneq ($(CROSS),)
-CROSS_PREFIX := $(CROSS)-
-endif
-CROSS_PREFIX := arm-angstrom-linux-gnueabi-
-CC	= $(CROSS_PREFIX)gcc
-endif
-
-CFLAGS	= -Wall -Wextra -O2 -march=armv5te
+#CFLAGS	= -Wall -Wextra -O2 -march=armv5te
 LFLAGS	=
+else
+CC=gcc
+CFLAGS	= -Wall -Wextra -O2
+LFLAGS	=
+endif
 
 TARGET = devmem2
 
